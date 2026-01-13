@@ -7,6 +7,7 @@ from app.models import base
 from app.core.database import engine
 import os
 from app.services.websocket_manager import manager
+from app.api.v1.routers import upload
 
 from app.core.cloudinary import configure_cloudinary
 from app.api.v1.routers import reactions
@@ -50,7 +51,7 @@ app.include_router(message.router, prefix="/api/v1/messages", tags=["messages"])
 app.include_router(reactions.router, prefix="/api/v1", tags=["reactions"])
 app.include_router(activity.router, prefix="/api/v1/activities", tags=["activities"])
 app.include_router(system_log.router, prefix="/api/v1", tags=["devices"])
-
+app.include_router(upload.router, prefix="/api/v1/upload")
 
 
 # Create static directories

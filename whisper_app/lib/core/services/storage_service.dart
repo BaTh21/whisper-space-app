@@ -11,7 +11,16 @@ class StorageService {
   late SharedPreferences _prefs;
   
   Future<void> init() async {
-    _prefs = await SharedPreferences.getInstance();
+    try {
+      _prefs = await SharedPreferences.getInstance();
+      
+
+      final allKeys = _prefs.getKeys();
+      if (getToken() != null) {
+      }
+    } catch (e) {
+      rethrow;
+    }
   }
   
   // Token management
@@ -20,7 +29,8 @@ class StorageService {
   }
   
   String? getToken() {
-    return _prefs.getString(_tokenKey);
+    final token = _prefs.getString(_tokenKey);
+    return token;
   }
   
   Future<void> saveRefreshToken(String refreshToken) async {
@@ -63,7 +73,8 @@ class StorageService {
   }
   
   bool isLoggedIn() {
-    return _prefs.getBool(_isLoggedInKey) ?? false;
+    final loggedIn = _prefs.getBool(_isLoggedInKey) ?? false;
+    return loggedIn;
   }
   
   // Clear all data (logout)
@@ -75,4 +86,6 @@ class StorageService {
   bool isFirstLaunch() {
     return !_prefs.containsKey(_isLoggedInKey);
   }
+  
+  int min(int a, int b) => a < b ? a : b;
 }

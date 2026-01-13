@@ -5,6 +5,7 @@ import '../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../features/auth/presentation/screens/login_screen.dart';
 import '../features/auth/presentation/screens/register_screen.dart';
 import '../features/auth/presentation/screens/verification_screen.dart';
+import '../features/feed/presentation/screens/feed_screen.dart';
 import '../shared/widgets/theme/app_theme.dart';
 
 
@@ -66,6 +67,13 @@ class WhisperSpaceApp extends StatelessWidget {
           child: _buildHomeScreen(),
         ),
       ),
+       GoRoute(
+        path: '/home',
+        pageBuilder: (context, state) => MaterialPage(
+          key: state.pageKey,
+          child: const FeedScreen(), // Changed from _buildHomeScreen() to FeedScreen
+        ),
+      )
     ],
   );
 

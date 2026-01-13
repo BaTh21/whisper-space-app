@@ -18,11 +18,27 @@ from app.core.cloudinary import (
     upload_to_cloudinary,
     upload_video_to_cloudinary,
 )
+# Add this to properly handle all image MIME types
+mimetypes.add_type('image/jpg', '.jpg')
+mimetypes.add_type('image/jpeg', '.jpeg')
+mimetypes.add_type('image/png', '.png')
+mimetypes.add_type('image/gif', '.gif')
+mimetypes.add_type('image/webp', '.webp')
+mimetypes.add_type('image/heic', '.heic')
+mimetypes.add_type('image/heif', '.heif')
 
 class ImageServiceSync:
     def __init__(self):
-        self.allowed_image_types = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
-        self.allowed_video_types = {'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm', 'video/ogg'}
+        # Add 'image/jpg' to allowed image types
+        self.allowed_image_types = {
+            'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 
+            'image/webp', 'image/heic', 'image/heif'
+        }
+        self.allowed_video_types = {
+            'video/mp4', 'video/quicktime', 'video/x-msvideo', 
+            'video/webm', 'video/ogg', 'video/avi', 'video/mpeg',
+            'video/3gpp', 'video/3gpp2'
+        }
         self.max_image_size = 10 * 1024 * 1024  # 10MB
         self.max_video_size = 50 * 1024 * 1024  # 50MB
     
@@ -40,32 +56,55 @@ class ImageServiceSync:
             
             mime_type = mime_info.split(':')[1]
             
+            # Normalize MIME types
+            mime_type = mime_type.lower()
+            
+            # Handle common MIME type variations
+            if mime_type == 'image/jpg':
+                mime_type = 'image/jpeg'
+            elif mime_type == 'image/x-png':
+                mime_type = 'image/png'
+            elif mime_type == 'image/x-icon':
+                mime_type = 'image/x-icon'
+            
             # Validate MIME type
             if mime_type.startswith('image/'):
                 if mime_type not in self.allowed_image_types:
-                    raise ValueError(f"Unsupported image type: {mime_type}")
+                    # Try to find alternative
+                    if mime_type == 'image/jpg':
+                        mime_type = 'image/jpeg'
+                    else:
+                        raise ValueError(f"Unsupported image type: {mime_type}")
             elif mime_type.startswith('video/'):
                 if mime_type not in self.allowed_video_types:
                     raise ValueError(f"Unsupported video type: {mime_type}")
             else:
                 raise ValueError(f"Unsupported media type: {mime_type}")
             
-            # Decode base64
             media_data = base64.b64decode(encoded)
+            
             
             # Validate size
             if mime_type.startswith('image/'):
                 if len(media_data) > self.max_image_size:
-                    raise ValueError(f"Image too large. Max {self.max_image_size // 1024 // 1024}MB")
+                    raise ValueError(
+                        f"Image too large. Max {self.max_image_size // 1024 // 1024}MB, "
+                        f"got {len(media_data) // 1024 // 1024}MB"
+                    )
             elif mime_type.startswith('video/'):
                 if len(media_data) > self.max_video_size:
-                    raise ValueError(f"Video too large. Max {self.max_video_size // 1024 // 1024}MB")
+                    raise ValueError(
+                        f"Video too large. Max {self.max_video_size // 1024 // 1024}MB, "
+                        f"got {len(media_data) // 1024 // 1024}MB"
+                    )
             
             media_type = 'video' if mime_type.startswith('video/') else 'image'
+            
             return media_data, mime_type, media_type
             
         except Exception as e:
             raise ValueError(f"Invalid media data: {str(e)}")
+
     
     def upload_image(self, image_data: bytes, folder: str = "images") -> str:
         """Upload image to Cloudinary"""
@@ -101,7 +140,6 @@ class ImageServiceSync:
     def save_single_media(self, data_url: str, is_diary: bool = True) -> Tuple[str, Optional[str]]:
         """Save single media item with GUARANTEED thumbnail for videos"""
         try:
-            print(f"🔄 save_single_media called")
             
             if not data_url:
                 raise ValueError("Empty data URL")
@@ -112,51 +150,38 @@ class ImageServiceSync:
                 
                 # Check if it's a video and generate thumbnail
                 if any(ext in data_url.lower() for ext in ['.mp4', '.mov', '.avi', '.webm', 'video']):
-                    print(f"🎥 Existing video URL detected")
                     try:
                         thumbnail = generate_video_thumbnail(data_url)
-                        print(f"📸 Generated thumbnail for existing video")
                         return data_url, thumbnail
                     except Exception as thumb_err:
-                        print(f"⚠️ Could not generate thumbnail: {thumb_err}")
                         return data_url, None
                 else:
                     return data_url, None
             
-            # New upload - validate and decode
             media_data, mime_type, media_type = self.validate_and_decode_media(data_url)
-            print(f"📦 Media type: {media_type}, Size: {len(media_data)} bytes")
             
             base_folder = "diaries" if is_diary else "comments"
             
             if media_type == 'image':
                 folder = f"{base_folder}/images"
-                print(f"📷 Uploading image to {folder}")
                 url = self.upload_image(media_data, folder)
-                print(f"✅ Image uploaded: {url[:50]}...")
                 return url, None
                 
             else:  # video
                 folder = f"{base_folder}/videos"
-                print(f"🎬 Uploading video to {folder}")
                 
-                # This function GUARANTEES a thumbnail
                 upload_result = upload_video_to_cloudinary(media_data, folder)
                 url = upload_result["secure_url"]
                 thumbnail = upload_result["thumbnail_url"]
-                
-                print(f"✅ Video uploaded: {url[:50]}...")
-                print(f"📸 Thumbnail: {thumbnail[:50] if thumbnail else 'None'}...")
+            
                 
                 # Double-check thumbnail
                 if not thumbnail:
-                    print(f"⚠️ CRITICAL: Still no thumbnail, trying again...")
                     thumbnail = generate_video_thumbnail(url)
                 
                 return url, thumbnail or None
                 
         except Exception as e:
-            print(f"❌ Error in save_single_media: {str(e)}")
             traceback.print_exc()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
