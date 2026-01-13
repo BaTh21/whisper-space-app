@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';  // Add this
 
 class ApiConstants {
@@ -22,6 +23,13 @@ class ApiConstants {
   static const String resetPassword = '/api/v1/auth/reset-password';
   static const String refreshToken = '/api/v1/auth/refresh';
   static const String logout = '/api/v1/auth/logout';
+
+  static const String diaries = '/api/v1/diaries';
+  static const String diariesFeed = '/api/v1/diaries/feed';
+  static const String myDiaries = '/api/v1/diaries/my-feed';
+  
+  static const String uploadMedia = '/api/v1/upload/media';
+  static const String uploadAvatar = '/api/v1/avatars/upload';
   
   // User endpoints
   static const String getUserProfile = '/api/v1/users/me';

@@ -1,6 +1,12 @@
-// home_screen.dart
+// lib/features/auth/presentation/screens/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:whisper_space_flutter/features/auth/data/models/diary_model.dart';
+import 'package:whisper_space_flutter/features/feed/presentation/screens/create_diary_screen.dart';
+import 'package:whisper_space_flutter/shared/widgets/diary_card.dart';
+
+import '../../../../features/feed/data/datasources/feed_api_service.dart';
+import '../../../../features/feed/presentation/providers/feed_provider.dart';
 import 'login_screen.dart';
 import 'providers/auth_provider.dart';
 
@@ -15,15 +21,15 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
   final List<Widget> _screens = [
-    const FeedScreen(),
-    const MessageScreen(),
-    const FriendsScreen(),
-    const NotesScreen(),
-    const ProfileScreen(),
+    const FeedTab(),
+    const MessagesTab(),
+    const FriendsTab(),
+    const NotesTab(),
+    const ProfileTab(),
   ];
 
   final List<String> _appBarTitles = [
-    'Feed',
+    'Whisper Space',
     'Messages',
     'Friends',
     'Notes',
@@ -36,10 +42,8 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Text(_appBarTitles[_selectedIndex]),
         centerTitle: true,
-        backgroundColor: Colors.deepPurple,
-        foregroundColor: Colors.white,
-        elevation: 1,
-        actions: _selectedIndex == 4 // Only show logout on Profile screen
+        elevation: 0,
+        actions: _selectedIndex == 4
             ? [
                 IconButton(
                   icon: const Icon(Icons.logout),
@@ -47,71 +51,101 @@ class _HomeScreenState extends State<HomeScreen> {
                   onPressed: _showLogoutDialog,
                 ),
               ]
-            : null,
+            : _selectedIndex == 0 
+                ? [
+                    // ADDED: Create button in app bar for Feed tab
+                    IconButton(
+                      icon: const Icon(Icons.add),
+                      tooltip: 'Create New Diary',
+                      onPressed: () => _createNewDiaryFromHome(context),
+                    ),
+                  ]
+                : null,
       ),
       body: _screens[_selectedIndex],
       bottomNavigationBar: _buildBottomNavBar(),
+      // ADDED: FloatingActionButton that's always visible on Feed tab
+      floatingActionButton: _selectedIndex == 0 ? _buildFloatingActionButton(context) : null,
+      // ADDED: Persistent Create button at bottom for Feed tab
+      persistentFooterAlignment: AlignmentDirectional.center,
+    );
+  }
+
+  Widget _buildFloatingActionButton(BuildContext context) {
+    return FloatingActionButton(
+      onPressed: () => _createNewDiaryFromHome(context),
+      child: const Icon(Icons.add),
+      heroTag: 'home_fab', // Unique tag for FAB
+    );
+  }
+
+  void _createNewDiaryFromHome(BuildContext context) {
+    final feedProvider = Provider.of<FeedProvider>(context, listen: false);
+    final feedApiService = Provider.of<FeedApiService>(context, listen: false);
+    
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CreateDiaryScreen(
+          feedApiService: feedApiService,
+          onDiaryCreated: (DiaryModel diary) {
+            // Add to provider
+            feedProvider.diaries.insert(0, diary);
+            
+            // Show success message
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Created: "${diary.title}"'),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 
   Widget _buildBottomNavBar() {
-    return Container(
-      decoration: BoxDecoration(
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
-            blurRadius: 10,
-            spreadRadius: 1,
-          ),
-        ],
-      ),
-      child: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.white,
-        selectedItemColor: Colors.deepPurple,
-        unselectedItemColor: Colors.grey[600],
-        selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-        unselectedLabelStyle: const TextStyle(fontSize: 11),
-        showUnselectedLabels: true,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
-            label: 'Feed',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.chat_bubble_outline),
-            activeIcon: Icon(Icons.chat_bubble),
-            label: 'Messages',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.group_outlined),
-            activeIcon: Icon(Icons.group),
-            label: 'Friends',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.note_outlined),
-            activeIcon: Icon(Icons.note),
-            label: 'Notes',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
-      ),
+    return NavigationBar(
+      selectedIndex: _selectedIndex,
+      onDestinationSelected: (index) {
+        setState(() {
+          _selectedIndex = index;
+        });
+      },
+      destinations: const [
+        NavigationDestination(
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home),
+          label: 'Feed',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.chat_bubble_outline),
+          selectedIcon: Icon(Icons.chat_bubble),
+          label: 'Messages',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.group_outlined),
+          selectedIcon: Icon(Icons.group),
+          label: 'Friends',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.note_outlined),
+          selectedIcon: Icon(Icons.note),
+          label: 'Notes',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.person_outlined),
+          selectedIcon: Icon(Icons.person),
+          label: 'Profile',
+        ),
+      ],
     );
   }
 
   Future<void> _showLogoutDialog() async {
-    final shouldLogout = await showDialog(
+    final shouldLogout = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Logout'),
@@ -127,456 +161,407 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-    );
+    ) ?? false;
 
-    if (shouldLogout == true) {
+    if (shouldLogout && mounted) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       await authProvider.logout();
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const LoginScreen(),
-        ),
-      );
+      
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const LoginScreen(),
+          ),
+        );
+      }
     }
   }
 }
 
-// Feed Screen
-class FeedScreen extends StatelessWidget {
-  const FeedScreen({super.key});
+// ============ FEED TAB ============
+class FeedTab extends StatefulWidget {
+  const FeedTab({super.key});
+
+  @override
+  State<FeedTab> createState() => _FeedTabState();
+}
+
+class _FeedTabState extends State<FeedTab> {
+  final ScrollController _scrollController = ScrollController();
+  bool _isInitialized = false;
+  bool _showCreateButton = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
+    _scrollController.addListener(_onScroll);
+  }
+
+  Future<void> _initialize() async {
+    await Future.delayed(const Duration(milliseconds: 100));
+    final feedProvider = Provider.of<FeedProvider>(context, listen: false);
+    await feedProvider.loadInitialFeed();
+    setState(() => _isInitialized = true);
+  }
+
+  void _onScroll() {
+    final currentScroll = _scrollController.position.pixels;
+    
+    // Show/hide create button based on scroll position
+    if (currentScroll > 100 && _showCreateButton) {
+      setState(() => _showCreateButton = false);
+    } else if (currentScroll <= 100 && !_showCreateButton) {
+      setState(() => _showCreateButton = true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: 10,
-      itemBuilder: (context, index) {
-        return _buildPostCard(index);
+    return Consumer<FeedProvider>(
+      builder: (context, feedProvider, child) {
+        if (!_isInitialized || feedProvider.isLoading && feedProvider.diaries.isEmpty) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (feedProvider.error != null && feedProvider.diaries.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                const SizedBox(height: 20),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Text(
+                    feedProvider.error!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () => feedProvider.refreshFeed(),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Stack(
+          children: [
+            RefreshIndicator(
+              onRefresh: () => feedProvider.refreshFeed(),
+              child: feedProvider.diaries.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.feed, size: 64, color: Colors.grey),
+                          const SizedBox(height: 20),
+                          const Text(
+                            'No diaries yet',
+                            style: TextStyle(fontSize: 18, color: Colors.grey),
+                          ),
+                          const SizedBox(height: 10),
+                          const Text(
+                            'Be the first to share something!',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                          const SizedBox(height: 20),
+                          ElevatedButton(
+                            onPressed: () => _navigateToCreateDiary(feedProvider),
+                            child: const Text('Create First Diary'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.all(16),
+                      itemCount: feedProvider.diaries.length,
+                      itemBuilder: (context, index) {
+                        final diary = feedProvider.diaries[index];
+                        return DiaryCard(
+                          diary: diary,
+                          onLike: () => feedProvider.likeDiary(diary.id),
+                          onFavorite: () => feedProvider.saveToFavorites(diary.id),
+                          onComment: () => _showComments(diary),
+                        );
+                      },
+                    ),
+            ),
+            
+            // ADDED: Fixed Create Button at bottom (always visible in FeedTab)
+            if (_showCreateButton && feedProvider.diaries.isNotEmpty)
+              Positioned(
+                bottom: 80, // Position above the FAB
+                right: 16,
+                left: 16,
+                child: _buildBottomCreateButton(context, feedProvider),
+              ),
+          ],
+        );
       },
     );
   }
 
-  Widget _buildPostCard(int index) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+  Widget _buildBottomCreateButton(BuildContext context, FeedProvider feedProvider) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(30),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    );
+  }
+
+  void _navigateToCreateDiary(FeedProvider feedProvider) {
+    final feedApiService = Provider.of<FeedApiService>(context, listen: false);
+    
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CreateDiaryScreen(
+          feedApiService: feedApiService,
+          onDiaryCreated: (DiaryModel diary) {
+            // Add to provider
+            feedProvider.diaries.insert(0, diary);
+            
+            // Show success message
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Created: "${diary.title}"'),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+            
+            // Scroll to top to show new diary
+            if (_scrollController.hasClients) {
+              _scrollController.animateTo(
+                0,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+              );
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showComments(DiaryModel diary) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.7,
+          maxChildSize: 0.9,
+          minChildSize: 0.5,
+          builder: (context, scrollController) {
+            return Column(
               children: [
-                CircleAvatar(
-                  backgroundColor: Colors.deepPurple[100],
-                  child: const Icon(Icons.person, color: Colors.deepPurple),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'User ${index + 1}',
+                        'Comments (${diary.comments.length})',
                         style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      Text(
-                        '${index + 1}h ago',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 12,
-                        ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
                       ),
                     ],
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.more_vert, size: 20),
-                  onPressed: () {},
+                Expanded(
+                  child: diary.comments.isEmpty
+                      ? const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.comment, size: 64, color: Colors.grey),
+                              SizedBox(height: 16),
+                              Text(
+                                'No comments yet',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              Text(
+                                'Be the first to comment!',
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          controller: scrollController,
+                          itemCount: diary.comments.length,
+                          itemBuilder: (context, index) {
+                            final comment = diary.comments[index];
+                            return ListTile(
+                              leading: CircleAvatar(
+                                backgroundImage: comment.user.avatarUrl != null
+                                    ? NetworkImage(comment.user.avatarUrl!)
+                                    : null,
+                                child: comment.user.avatarUrl == null
+                                    ? Text(comment.user.username[0])
+                                    : null,
+                              ),
+                              title: Text(comment.user.username),
+                              subtitle: Text(comment.content),
+                              trailing: Text(
+                                _formatDate(comment.createdAt),
+                                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                              ),
+                            );
+                          },
+                        ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'This is a sample post content. Whisper Space is your personal social space.',
-              style: TextStyle(fontSize: 15),
-            ),
-            if (index % 3 == 0) ...[
-              const SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  height: 150,
-                  color: Colors.deepPurple[50],
-                  child: const Center(
-                    child: Icon(Icons.image, color: Colors.deepPurple, size: 50),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    border: Border(top: BorderSide(color: Colors.grey.shade300)),
                   ),
-                ),
-              ),
-            ],
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    IconButton(
-                      icon: Icon(
-                        index % 2 == 0 ? Icons.favorite : Icons.favorite_border,
-                        color: index % 2 == 0 ? Colors.red : Colors.grey,
-                        size: 20,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          decoration: const InputDecoration(
+                            hintText: 'Add a comment...',
+                            border: InputBorder.none,
+                          ),
+                        ),
                       ),
-                      onPressed: () {},
-                    ),
-                    const SizedBox(width: 4),
-                    Text('${index * 3 + 5}'),
-                  ],
-                ),
-                TextButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.comment, size: 18),
-                  label: const Text('Comment'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.grey[700],
+                      IconButton(
+                        icon: const Icon(Icons.send),
+                        onPressed: () {},
+                      ),
+                    ],
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.share, size: 20),
-                  onPressed: () {},
                 ),
               ],
-            ),
-          ],
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+    
+    if (difference.inDays > 365) {
+      return '${difference.inDays ~/ 365}y ago';
+    } else if (difference.inDays > 30) {
+      return '${difference.inDays ~/ 30}mo ago';
+    } else if (difference.inDays > 0) {
+      return '${difference.inDays}d ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'Just now';
+    }
   }
 }
 
-// Messages Screen
-class MessageScreen extends StatelessWidget {
-  const MessageScreen({super.key});
+// ============ OTHER TABS (Simplified) ============
+class MessagesTab extends StatelessWidget {
+  const MessagesTab({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: TextField(
-            decoration: InputDecoration(
-              hintText: 'Search messages...',
-              prefixIcon: const Icon(Icons.search),
-              filled: true,
-              fillColor: Colors.grey[50],
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(25),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                vertical: 12,
-                horizontal: 16,
-              ),
-            ),
-          ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: 8,
-            itemBuilder: (context, index) {
-              return _buildMessageTile(index);
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMessageTile(int index) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: Colors.blue[100],
-          child: Text(
-            'U${index + 1}',
-            style: const TextStyle(color: Colors.blue),
-          ),
-        ),
-        title: Text(
-          'Friend ${index + 1}',
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        subtitle: const Text(
-          'Last message preview...',
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              '${index + 1}:${index * 10}0',
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey[600],
-              ),
-            ),
-            if (index % 3 == 0)
-              Container(
-                margin: const EdgeInsets.only(top: 4),
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.red,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Text(
-                  '3',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        onTap: () {},
-      ),
-    );
-  }
-}
-
-// Friends Screen
-class FriendsScreen extends StatelessWidget {
-  const FriendsScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Search friends...',
-                    prefixIcon: const Icon(Icons.search),
-                    filled: true,
-                    fillColor: Colors.grey[50],
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(25),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.deepPurple,
-                  borderRadius: BorderRadius.circular(25),
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.person_add, color: Colors.white),
-                  onPressed: () {},
-                ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: GridView.builder(
-            padding: const EdgeInsets.all(16),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-              childAspectRatio: 0.8,
-            ),
-            itemCount: 6,
-            itemBuilder: (context, index) {
-              return _buildFriendCard(index);
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFriendCard(int index) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+    return const Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircleAvatar(
-            radius: 40,
-            backgroundColor: Colors.green[100],
-            child: Icon(
-              Icons.person,
-              size: 50,
-              color: Colors.green[700],
-            ),
-          ),
-          const SizedBox(height: 12),
+          Icon(Icons.chat_bubble, size: 64, color: Colors.grey),
+          SizedBox(height: 16),
           Text(
-            'Friend ${index + 1}',
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 16,
-            ),
+            'Messages',
+            style: TextStyle(fontSize: 24, color: Colors.grey),
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Last active: ${index + 2}h ago',
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.message, size: 18),
-                onPressed: () {},
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.blue[50],
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.videocam, size: 18),
-                onPressed: () {},
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.green[50],
-                ),
-              ),
-            ],
-          ),
+          Text('Coming soon...'),
         ],
       ),
     );
   }
 }
 
-// Notes Screen
-class NotesScreen extends StatelessWidget {
-  const NotesScreen({super.key});
+class FriendsTab extends StatelessWidget {
+  const FriendsTab({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: ElevatedButton.icon(
-            onPressed: () {},
-            icon: const Icon(Icons.add),
-            label: const Text('Create New Note'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.deepPurple,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(double.infinity, 50),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.group, size: 64, color: Colors.grey),
+          SizedBox(height: 16),
+          Text(
+            'Friends',
+            style: TextStyle(fontSize: 24, color: Colors.grey),
           ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: 5,
-            itemBuilder: (context, index) {
-              return _buildNoteCard(index);
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildNoteCard(int index) {
-    final colors = [
-      Colors.blue[50],
-      Colors.green[50],
-      Colors.orange[50],
-      Colors.purple[50],
-      Colors.red[50],
-    ];
-    final iconColors = [
-      Colors.blue,
-      Colors.green,
-      Colors.orange,
-      Colors.purple,
-      Colors.red,
-    ];
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 1,
-      color: colors[index % colors.length],
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(
-            Icons.note,
-            color: iconColors[index % iconColors.length],
-          ),
-        ),
-        title: Text(
-          'Note Title ${index + 1}',
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        subtitle: const Text(
-          'Note content preview...',
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: IconButton(
-          icon: const Icon(Icons.more_vert, size: 20),
-          onPressed: () {},
-        ),
-        onTap: () {},
+          Text('Coming soon...'),
+        ],
       ),
     );
   }
 }
 
-// Profile Screen
-class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key});
+class NotesTab extends StatelessWidget {
+  const NotesTab({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.note, size: 64, color: Colors.grey),
+          SizedBox(height: 16),
+          Text(
+            'Notes',
+            style: TextStyle(fontSize: 24, color: Colors.grey),
+          ),
+          Text('Coming soon...'),
+        ],
+      ),
+    );
+  }
+}
+
+class ProfileTab extends StatelessWidget {
+  const ProfileTab({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
         final user = authProvider.currentUser;
-
+        
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -584,39 +569,18 @@ class ProfileScreen extends StatelessWidget {
               // Profile Header
               Card(
                 elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
                 child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
-                      Stack(
-                        alignment: Alignment.bottomRight,
-                        children: [
-                          CircleAvatar(
-                            radius: 50,
-                            backgroundColor: Colors.deepPurple[100],
-                            child: const Icon(
-                              Icons.person,
-                              size: 60,
-                              color: Colors.deepPurple,
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.grey[300]!),
-                            ),
-                            child: Icon(
-                              Icons.edit,
-                              size: 18,
-                              color: Colors.grey[700],
-                            ),
-                          ),
-                        ],
+                      const CircleAvatar(
+                        radius: 50,
+                        backgroundColor: Color(0xFF6C63FF),
+                        child: Icon(
+                          Icons.person,
+                          size: 60,
+                          color: Colors.white,
+                        ),
                       ),
                       const SizedBox(height: 16),
                       Text(
@@ -629,24 +593,10 @@ class ProfileScreen extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         user?.email ?? '',
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 16,
-                          color: Colors.grey[600],
+                          color: Colors.grey,
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      Chip(
-                        label: Text(
-                          user?.isVerified == true ? 'Verified' : 'Not Verified',
-                          style: TextStyle(
-                            color: user?.isVerified == true
-                                ? Colors.white
-                                : Colors.black,
-                          ),
-                        ),
-                        backgroundColor: user?.isVerified == true
-                            ? Colors.green
-                            : Colors.orange[100],
                       ),
                     ],
                   ),
@@ -657,19 +607,15 @@ class ProfileScreen extends StatelessWidget {
 
               // Stats
               Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _buildStatItem('24', 'Posts'),
-                      _buildStatItem('128', 'Friends'),
-                      _buildStatItem('15', 'Notes'),
-                      _buildStatItem('42', 'Likes'),
+                      _StatItem(value: '24', label: 'Posts'),
+                      _StatItem(value: '128', label: 'Friends'),
+                      _StatItem(value: '15', label: 'Notes'),
+                      _StatItem(value: '42', label: 'Likes'),
                     ],
                   ),
                 ),
@@ -679,37 +625,29 @@ class ProfileScreen extends StatelessWidget {
 
               // Menu Items
               Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
                 child: Column(
                   children: [
                     _buildMenuItem(
                       Icons.settings,
                       'Settings',
-                      Icons.chevron_right,
                       () {},
                     ),
                     const Divider(height: 0),
                     _buildMenuItem(
                       Icons.notifications,
                       'Notifications',
-                      Icons.chevron_right,
                       () {},
                     ),
                     const Divider(height: 0),
                     _buildMenuItem(
                       Icons.privacy_tip,
                       'Privacy',
-                      Icons.chevron_right,
                       () {},
                     ),
                     const Divider(height: 0),
                     _buildMenuItem(
                       Icons.help,
                       'Help & Support',
-                      Icons.chevron_right,
                       () {},
                     ),
                   ],
@@ -730,12 +668,8 @@ class ProfileScreen extends StatelessWidget {
                   icon: const Icon(Icons.logout),
                   label: const Text('Logout'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red[50],
+                    backgroundColor: const Color(0xFFFFEBEE),
                     foregroundColor: Colors.red,
-                    minimumSize: const Size(double.infinity, 50),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
                   ),
                 ),
               ),
@@ -746,7 +680,24 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildStatItem(String value, String label) {
+  Widget _buildMenuItem(IconData icon, String title, VoidCallback onTap) {
+    return ListTile(
+      leading: Icon(icon, color: const Color(0xFF6C63FF)),
+      title: Text(title),
+      trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+      onTap: onTap,
+    );
+  }
+}
+
+class _StatItem extends StatelessWidget {
+  final String value;
+  final String label;
+
+  const _StatItem({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       children: [
         Text(
@@ -754,28 +705,18 @@ class ProfileScreen extends StatelessWidget {
           style: const TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
-            color: Colors.deepPurple,
+            color: Color(0xFF6C63FF),
           ),
         ),
         const SizedBox(height: 4),
         Text(
           label,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 12,
-            color: Colors.grey[600],
+            color: Colors.grey,
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildMenuItem(
-      IconData leadingIcon, String title, IconData trailingIcon, VoidCallback onTap) {
-    return ListTile(
-      leading: Icon(leadingIcon, color: Colors.deepPurple),
-      title: Text(title),
-      trailing: Icon(trailingIcon, color: Colors.grey),
-      onTap: onTap,
     );
   }
 }
