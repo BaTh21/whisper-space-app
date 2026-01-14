@@ -1,6 +1,7 @@
 // lib/shared/widgets/diary_card.dart
 import 'package:flutter/material.dart';
 import 'package:whisper_space_flutter/features/auth/data/models/diary_model.dart';
+import 'package:whisper_space_flutter/shared/widgets/media_gallery.dart';
 
 class DiaryCard extends StatelessWidget {
   final DiaryModel diary;
@@ -21,122 +22,185 @@ class DiaryCard extends StatelessWidget {
     return Card(
       elevation: 2,
       margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Row(
-              children: [
-                CircleAvatar(
-                  backgroundImage: diary.author.avatarUrl != null
-                      ? NetworkImage(diary.author.avatarUrl!)
-                      : null,
-                  child: diary.author.avatarUrl == null
-                      ? Text(diary.author.username[0])
-                      : null,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        diary.author.username,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: Colors.white,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                children: [
+                  CircleAvatar(
+                    backgroundImage: diary.author.avatarUrl != null &&
+                            diary.author.avatarUrl!.isNotEmpty
+                        ? NetworkImage(diary.author.avatarUrl!)
+                        : null,
+                    radius: 22,
+                    child: diary.author.avatarUrl == null ||
+                            diary.author.avatarUrl!.isEmpty
+                        ? Text(
+                            diary.author.username.isNotEmpty
+                                ? diary.author.username[0].toUpperCase()
+                                : 'U',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          diary.author.username,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
                         ),
-                      ),
-                      Text(
-                        _formatDate(diary.createdAt),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
+                        Text(
+                          _formatDate(diary.createdAt),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.more_vert, size: 20),
+                    onPressed: () {},
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+
+              // Title
+              if (diary.title.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    diary.title,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.more_vert),
-                  onPressed: () {},
+
+              // Content
+              if (diary.content.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Text(
+                    diary.content,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.black87,
+                      height: 1.5,
+                    ),
+                  ),
                 ),
-              ],
+
+              // Media Gallery (UNIFIED - This is the ONLY media section)
+              if (diary.images.isNotEmpty || diary.videos.isNotEmpty)
+                Column(
+                  children: [
+                    MediaGallery(
+                      images: diary.images,
+                      videos: diary.videos,
+                      videoThumbnails: diary.videoThumbnails,
+                      height: 250,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
+
+              // Divider
+              const Divider(height: 20),
+
+              // Actions
+              Row(
+                children: [
+                  _buildActionButton(
+                    icon: diary.likes.isNotEmpty
+                        ? Icons.favorite
+                        : Icons.favorite_border,
+                    count: diary.likes.length,
+                    onPressed: onLike,
+                    isActive: diary.likes.isNotEmpty,
+                  ),
+                  const SizedBox(width: 16),
+                  _buildActionButton(
+                    icon: Icons.comment_outlined,
+                    count: diary.comments.length,
+                    onPressed: onComment,
+                    isActive: false,
+                  ),
+                  const Spacer(),
+                  _buildActionButton(
+                    icon: diary.favoritedUserIds.isNotEmpty
+                        ? Icons.bookmark
+                        : Icons.bookmark_border,
+                    count: 0,
+                    onPressed: onFavorite,
+                    isActive: diary.favoritedUserIds.isNotEmpty,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required int count,
+    required VoidCallback onPressed,
+    required bool isActive,
+  }) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: isActive ? Colors.red.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: isActive ? Colors.red : Colors.grey[600],
             ),
-            
-            const SizedBox(height: 16),
-            
-            // Title
-            if (diary.title.isNotEmpty)
+            if (count > 0) ...[
+              const SizedBox(width: 4),
               Text(
-                diary.title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
+                count.toString(),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: isActive ? Colors.red : Colors.grey[600],
                 ),
               ),
-            
-            // Content
-            const SizedBox(height: 8),
-            Text(
-              diary.content,
-              style: const TextStyle(fontSize: 14),
-            ),
-            
-            // Media preview
-            if (diary.images.isNotEmpty || diary.videos.isNotEmpty)
-              const SizedBox(height: 16),
-            
-            if (diary.images.isNotEmpty)
-              SizedBox(
-                height: 200,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: diary.images.length,
-                  itemBuilder: (context, index) {
-                    return Container(
-                      width: 200,
-                      margin: EdgeInsets.only(
-                        right: index < diary.images.length - 1 ? 8 : 0,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        image: DecorationImage(
-                          image: NetworkImage(diary.images[index]),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            
-            // Actions
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.thumb_up_outlined),
-                  onPressed: onLike,
-                ),
-                Text('${diary.likes.length}'),
-                const SizedBox(width: 16),
-                IconButton(
-                  icon: const Icon(Icons.comment_outlined),
-                  onPressed: onComment,
-                ),
-                Text('${diary.comments.length}'),
-                const Spacer(),
-                IconButton(
-                  icon: diary.favoritedUserIds.contains(1) // Replace with actual user ID
-                      ? const Icon(Icons.favorite, color: Colors.red)
-                      : const Icon(Icons.favorite_border),
-                  onPressed: onFavorite,
-                ),
-              ],
-            ),
+            ],
           ],
         ),
       ),
@@ -146,7 +210,7 @@ class DiaryCard extends StatelessWidget {
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final difference = now.difference(date);
-    
+
     if (difference.inDays > 365) {
       return '${difference.inDays ~/ 365}y ago';
     } else if (difference.inDays > 30) {
