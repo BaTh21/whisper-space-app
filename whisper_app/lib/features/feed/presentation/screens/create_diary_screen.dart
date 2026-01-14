@@ -87,88 +87,101 @@ class _CreateDiaryScreenState extends State<CreateDiaryScreen> {
     }
   }
 
-  Future<void> _submitDiary() async {
-    if (!_formKey.currentState!.validate()) {
-      _showSnackBar('Please fix the errors in the form', isError: true);
-      return;
-    }
+Future<void> _submitDiary() async {
+  if (!_formKey.currentState!.validate()) {
+    _showSnackBar('Please fix the errors in the form', isError: true);
+    return;
+  }
 
-    final title = _titleController.text.trim();
-    final content = _contentController.text.trim();
+  final title = _titleController.text.trim();
+  final content = _contentController.text.trim();
+  
+  if (title.isEmpty || content.isEmpty) {
+    _showSnackBar('Please enter both title and content', isError: true);
+    return;
+  }
+
+  if (title.length < 3) {
+    _showSnackBar('Title must be at least 3 characters', isError: true);
+    return;
+  }
+
+  if (content.length < 10) {
+    _showSnackBar('Content must be at least 10 characters', isError: true);
+    return;
+  }
+
+  setState(() => _isLoading = true);
+
+  try {
+    List<String> imageUrls = [];
+    List<String> videoUrls = [];
     
-    if (title.isEmpty || content.isEmpty) {
-      _showSnackBar('Please enter both title and content', isError: true);
-      return;
-    }
-
-    if (title.length < 3) {
-      _showSnackBar('Title must be at least 3 characters', isError: true);
-      return;
-    }
-
-    if (content.length < 10) {
-      _showSnackBar('Content must be at least 10 characters', isError: true);
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      List<String> imageUrls = [];
-      List<String> videoUrls = [];
+    // Upload media if any
+    if (_selectedImages.isNotEmpty || _selectedVideos.isNotEmpty) {
+      _showSnackBar('Uploading media...', isError: false);
       
-      // Upload media if any
-      if (_selectedImages.isNotEmpty || _selectedVideos.isNotEmpty) {
-        _showSnackBar('Uploading media...', isError: false);
-        
-        // Upload images
-        for (final image in _selectedImages) {
-          setState(() => _uploadingMedia = true);
+      // Upload images
+      for (int i = 0; i < _selectedImages.length; i++) {
+        final image = _selectedImages[i];
+        setState(() => _uploadingMedia = true);
+        try {
+          _showSnackBar('Uploading image ${i + 1}/${_selectedImages.length}', isError: false);
           final url = await widget.feedApiService.uploadMedia(image, isVideo: false);
           imageUrls.add(url);
+        } catch (e) {
+          _showSnackBar('Failed to upload image ${i + 1}: $e', isError: true);
+          // Continue with other images
         }
-        
-        // Upload videos
-        for (final video in _selectedVideos) {
-          setState(() => _uploadingMedia = true);
+      }
+      
+      // Upload videos
+      for (int i = 0; i < _selectedVideos.length; i++) {
+        final video = _selectedVideos[i];
+        setState(() => _uploadingMedia = true);
+        try {
+          _showSnackBar('Uploading video ${i + 1}/${_selectedVideos.length}', isError: false);
           final url = await widget.feedApiService.uploadMedia(video, isVideo: true);
           videoUrls.add(url);
+        } catch (e) {
+          _showSnackBar('Failed to upload video ${i + 1}: $e', isError: true);
+          // Continue with other videos
         }
       }
-      
-      // Create diary
-      final diary = await widget.feedApiService.createDiary(
-        title: title,
-        content: content,
-        shareType: _shareType,
-        groupIds: _selectedGroupIds.isNotEmpty ? _selectedGroupIds : null,
-        imageUrls: imageUrls.isNotEmpty ? imageUrls : null,
-        videoUrls: videoUrls.isNotEmpty ? videoUrls : null,
-      );
-      
-      _showSnackBar('✅ Diary created successfully!', isError: false);
-      
-      // Notify parent
-      if (widget.onDiaryCreated != null) {
-        widget.onDiaryCreated!(diary);
-      }
-      
-      // Close screen
-      if (mounted) {
-        Navigator.pop(context, diary);
-      }
-
-    } catch (e) {
-      _showSnackBar('Failed to create diary: ${e.toString()}', isError: true);
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _uploadingMedia = false;
-        });
-      }
     }
+    
+    // Create diary
+    _showSnackBar('Creating diary...', isError: false);
+    final diary = await widget.feedApiService.createDiary(
+      title: title,
+      content: content,
+      shareType: _shareType,
+      groupIds: _selectedGroupIds.isNotEmpty ? _selectedGroupIds : null,
+      imageUrls: imageUrls.isNotEmpty ? imageUrls : null,
+      videoUrls: videoUrls.isNotEmpty ? videoUrls : null,
+    );
+    
+    _showSnackBar('✅ Diary created successfully!', isError: false);
+    
+    // Notify parent
+    if (widget.onDiaryCreated != null) {
+      widget.onDiaryCreated!(diary);
+    }
+    
+    // Show success screen
+    setState(() {
+      _isLoading = false;
+      _uploadingMedia = false;
+    });
+    
+  } catch (e) {
+    _showSnackBar('Failed to create diary: ${e.toString()}', isError: true);
+    setState(() {
+      _isLoading = false;
+      _uploadingMedia = false;
+    });
   }
+}
 
   void _showSnackBar(String message, {required bool isError}) {
     if (!mounted) return;

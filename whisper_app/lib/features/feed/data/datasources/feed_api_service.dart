@@ -1,6 +1,7 @@
 // lib/features/feed/data/datasources/feed_api_service.dart
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:http/http.dart' as http;
 import 'package:whisper_space_flutter/core/constants/api_constants.dart';
 import 'package:whisper_space_flutter/core/services/storage_service.dart';
@@ -214,53 +215,104 @@ class FeedApiService {
   }
 
   // ============ UPLOAD MEDIA ============
-  Future<String> uploadMedia(File file, {bool isVideo = false}) async {
-    try {
-      final token = storageService.getToken();
-      if (token == null) {
-        throw Exception('No authentication token');
-      }
-      
-      _log('📤 Uploading ${isVideo ? 'video' : 'image'}...');
-      
-      // Read file as bytes
-      final bytes = await file.readAsBytes();
-      
-      // Convert to base64
-      final base64Data = base64Encode(bytes);
-      
-      // Get file extension
-      final extension = file.path.split('.').last.toLowerCase();
-      
-      // Create data URL
-      final mimeType = isVideo ? 'video/$extension' : 'image/$extension';
-      final dataUrl = 'data:$mimeType;base64,$base64Data';
-      
-      // Upload to server
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/v1/upload/media'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'data_url': dataUrl,
-          'filename': '${isVideo ? 'video' : 'image'}_${DateTime.now().millisecondsSinceEpoch}.$extension',
-          'is_diary': true,
-        }),
-      );
-      
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final url = data['url'] as String;
-        _log('✅ Upload successful: $url');
-        return url;
-      } else {
-        throw Exception('Upload failed: ${response.statusCode} - ${response.body}');
-      }
-    } catch (e) {
-      _log('❌ Upload error: $e');
-      rethrow;
+Future<String> uploadMedia(File file, {bool isVideo = false}) async {
+  try {
+    final token = storageService.getToken();
+    if (token == null) {
+      throw Exception('No authentication token');
     }
+    
+    _log('📤 Uploading ${isVideo ? 'video' : 'image'}...');
+    _log('📁 File path: ${file.path}');
+    _log('📊 File size: ${await file.length()} bytes');
+    
+    // Read file as bytes
+    final bytes = await file.readAsBytes();
+    
+    // Convert to base64
+    final base64Data = base64Encode(bytes);
+    
+    // Get file extension
+    final extension = file.path.split('.').last.toLowerCase();
+    
+    // Create proper MIME type
+    String mimeType;
+    if (isVideo) {
+      // Map extensions to proper MIME types
+      switch (extension) {
+        case 'mp4':
+          mimeType = 'video/mp4';
+          break;
+        case 'mov':
+          mimeType = 'video/quicktime';
+          break;
+        case 'avi':
+          mimeType = 'video/x-msvideo';
+          break;
+        case 'webm':
+          mimeType = 'video/webm';
+          break;
+        case 'mkv':
+          mimeType = 'video/x-matroska';
+          break;
+        default:
+          mimeType = 'video/mp4';
+      }
+    } else {
+      switch (extension) {
+        case 'jpg':
+        case 'jpeg':
+          mimeType = 'image/jpeg';
+          break;
+        case 'png':
+          mimeType = 'image/png';
+          break;
+        case 'gif':
+          mimeType = 'image/gif';
+          break;
+        case 'webp':
+          mimeType = 'image/webp';
+          break;
+        default:
+          mimeType = 'image/jpeg';
+      }
+    }
+    
+    final dataUrl = 'data:$mimeType;base64,$base64Data';
+    
+    _log('📋 MIME type: $mimeType');
+    _log('📦 Data URL length: ${dataUrl.length}');
+    
+    // Upload to server
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/upload/media'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'data_url': dataUrl,
+        'filename': '${isVideo ? 'video' : 'image'}_${DateTime.now().millisecondsSinceEpoch}.$extension',
+        'is_diary': true,
+      }),
+    );
+    
+    _log('📥 Upload response: ${response.statusCode}');
+    
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final url = data['url'] as String;
+      final thumbnail = data['thumbnail'] as String?;
+      _log('✅ Upload successful: $url');
+      _log('📸 Thumbnail: $thumbnail');
+      return url;
+    } else {
+      _log('❌ Upload failed: ${response.body}');
+      throw Exception('Upload failed: ${response.statusCode} - ${response.body}');
+    }
+  } catch (e) {
+    _log('❌ Upload error: $e');
+    rethrow;
   }
+}
 }

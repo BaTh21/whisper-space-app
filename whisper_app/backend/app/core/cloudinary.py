@@ -93,6 +93,7 @@ def upload_video_to_cloudinary(video_data: bytes, folder: str = "videos") -> Dic
         public_id = f"video_{uuid.uuid4().hex[:12]}"
         
         print(f"📤 Uploading video to {full_folder}/{public_id}")
+        print(f"📊 Video size: {len(video_data)} bytes")
         
         # Create temporary file
         with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp_file:
@@ -100,14 +101,14 @@ def upload_video_to_cloudinary(video_data: bytes, folder: str = "videos") -> Dic
             tmp_path = tmp_file.name
         
         try:
-            # Upload BYTES directly — much more reliable on servers
+            # Upload video with explicit video format
             upload_result = uploader.upload(
-                video_data,  # ← PASS BYTES DIRECTLY
+                tmp_path,
                 resource_type="video",
                 public_id=public_id,
                 folder=full_folder,
                 overwrite=True,
-                eager=[
+                eager=[  # Force thumbnail generation
                     {
                         "width": 320,
                         "height": 180,
@@ -116,7 +117,7 @@ def upload_video_to_cloudinary(video_data: bytes, folder: str = "videos") -> Dic
                         "format": "jpg"
                     }
                 ],
-                eager_async=False,
+                eager_async=False,  # Make it synchronous
                 transformation=[
                     {"width": 1280, "height": 720, "crop": "limit"},
                     {"quality": "auto:eco"},
@@ -126,35 +127,13 @@ def upload_video_to_cloudinary(video_data: bytes, folder: str = "videos") -> Dic
                 chunk_size=6000000,  # 6MB chunks
                 timeout=120
             )
-        
-        # try:
-        #     # Upload with FORCED thumbnail generation
-        #     upload_result = uploader.upload(
-        #         tmp_path,
-        #         resource_type="video",
-        #         public_id=public_id,
-        #         folder=full_folder,
-        #         overwrite=True,
-        #         eager=[  # This forces thumbnail generation
-        #             {
-        #                 "width": 320,
-        #                 "height": 180,
-        #                 "crop": "fill",
-        #                 "quality": "auto",
-        #                 "format": "jpg"
-        #             }
-        #         ],
-        #         eager_async=False,  # Make it synchronous
-        #         transformation=[
-        #             {"width": 1280, "height": 720, "crop": "limit"},
-        #             {"quality": "auto:eco"},
-        #             {"format": "mp4"}
-        #         ]
-        #     )
             
             print(f"📊 Cloudinary upload successful:")
             print(f"  - Secure URL: {upload_result.get('secure_url')}")
             print(f"  - Eager transformations: {upload_result.get('eager')}")
+            print(f"  - Format: {upload_result.get('format')}")
+            print(f"  - Duration: {upload_result.get('duration')}")
+            print(f"  - Bytes: {upload_result.get('bytes')}")
             
             # Get thumbnail from eager transformation
             thumbnail_url = None
@@ -162,6 +141,7 @@ def upload_video_to_cloudinary(video_data: bytes, folder: str = "videos") -> Dic
                 for eager_item in upload_result['eager']:
                     if eager_item.get('format') == 'jpg':
                         thumbnail_url = eager_item.get('secure_url')
+                        print(f"📸 Found eager thumbnail: {thumbnail_url}")
                         break
             
             # If still no thumbnail, generate one manually
@@ -176,6 +156,7 @@ def upload_video_to_cloudinary(video_data: bytes, folder: str = "videos") -> Dic
                     ],
                     resource_type="video"
                 )
+                print(f"📸 Generated manual thumbnail: {thumbnail_url}")
             
             print(f"📸 Final thumbnail URL: {thumbnail_url}")
             
