@@ -6,7 +6,6 @@ import 'package:web_socket_channel/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:whisper_space_flutter/core/services/storage_service.dart';
 import 'package:whisper_space_flutter/features/auth/data/models/diary_model.dart';
-import 'package:whisper_space_flutter/features/auth/data/models/user_model.dart';
 
 class WebSocketManager {
   static final WebSocketManager _instance = WebSocketManager._internal();
