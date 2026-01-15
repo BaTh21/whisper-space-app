@@ -119,18 +119,17 @@ Future<void> _submitDiary() async {
     
     // Upload media if any
     if (_selectedImages.isNotEmpty || _selectedVideos.isNotEmpty) {
-      _showSnackBar('Uploading media...', isError: false);
+      setState(() => _uploadingMedia = true);
       
       // Upload images
       for (int i = 0; i < _selectedImages.length; i++) {
         final image = _selectedImages[i];
-        setState(() => _uploadingMedia = true);
         try {
-          _showSnackBar('Uploading image ${i + 1}/${_selectedImages.length}', isError: false);
+          _showSnackBar('Uploading image ${i + 1}/${_selectedImages.length}...', isError: false);
           final url = await widget.feedApiService.uploadMedia(image, isVideo: false);
           imageUrls.add(url);
         } catch (e) {
-          _showSnackBar('Failed to upload image ${i + 1}: $e', isError: true);
+          print('Failed to upload image: $e');
           // Continue with other images
         }
       }
@@ -138,20 +137,22 @@ Future<void> _submitDiary() async {
       // Upload videos
       for (int i = 0; i < _selectedVideos.length; i++) {
         final video = _selectedVideos[i];
-        setState(() => _uploadingMedia = true);
         try {
-          _showSnackBar('Uploading video ${i + 1}/${_selectedVideos.length}', isError: false);
+          _showSnackBar('Uploading video ${i + 1}/${_selectedVideos.length}...', isError: false);
           final url = await widget.feedApiService.uploadMedia(video, isVideo: true);
           videoUrls.add(url);
         } catch (e) {
-          _showSnackBar('Failed to upload video ${i + 1}: $e', isError: true);
+          print('Failed to upload video: $e');
           // Continue with other videos
         }
       }
+      
+      setState(() => _uploadingMedia = false);
     }
     
     // Create diary
     _showSnackBar('Creating diary...', isError: false);
+    
     final diary = await widget.feedApiService.createDiary(
       title: title,
       content: content,
@@ -161,25 +162,32 @@ Future<void> _submitDiary() async {
       videoUrls: videoUrls.isNotEmpty ? videoUrls : null,
     );
     
+    // Wait a bit for the success message to show
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    // Show final success message
     _showSnackBar('✅ Diary created successfully!', isError: false);
     
-    // Notify parent
+    // Wait a bit more for user to see success
+    await Future.delayed(const Duration(milliseconds: 1000));
+    
+    // IMPORTANT: Notify parent and close screen
     if (widget.onDiaryCreated != null) {
       widget.onDiaryCreated!(diary);
     }
     
-    // Show success screen
+    // Close the screen and return the created diary
+    if (mounted) {
+      Navigator.of(context).pop(diary);
+    }
+    
+  } catch (e) {
     setState(() {
       _isLoading = false;
       _uploadingMedia = false;
     });
     
-  } catch (e) {
     _showSnackBar('Failed to create diary: ${e.toString()}', isError: true);
-    setState(() {
-      _isLoading = false;
-      _uploadingMedia = false;
-    });
   }
 }
 

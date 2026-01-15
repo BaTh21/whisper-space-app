@@ -12,6 +12,7 @@ from app.api.v1.routers import upload
 from app.core.cloudinary import configure_cloudinary
 from app.api.v1.routers import reactions
 from app.api.v1.routers import system_log
+from app.api.v1.routers import websocket_feed
 
 # Create database tables
 base.Base.metadata.create_all(bind=engine)
@@ -52,6 +53,7 @@ app.include_router(reactions.router, prefix="/api/v1", tags=["reactions"])
 app.include_router(activity.router, prefix="/api/v1/activities", tags=["activities"])
 app.include_router(system_log.router, prefix="/api/v1", tags=["devices"])
 app.include_router(upload.router, prefix="/api/v1/upload")
+app.include_router(websocket_feed.router, prefix="/ws", tags=["websocket"])
 
 
 # Create static directories
