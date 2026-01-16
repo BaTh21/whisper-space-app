@@ -10,6 +10,7 @@ class ShareType(enum.Enum):
     friends = "friends"
     personal = "personal"
     group = "group"
+    private = "private"
 
 class Diary(Base):
     __tablename__ = "diaries"

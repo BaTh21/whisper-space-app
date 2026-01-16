@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:whisper_space_flutter/features/auth/data/models/diary_model.dart';
 import 'package:whisper_space_flutter/features/feed/presentation/screens/create_diary_screen.dart';
+import 'package:whisper_space_flutter/features/feed/presentation/screens/edit_diary_full_screen.dart';
 import 'package:whisper_space_flutter/shared/widgets/diary_card.dart';
 
 import '../../../../features/feed/data/datasources/feed_api_service.dart';
@@ -416,28 +417,42 @@ class _FeedTabState extends State<FeedTab> {
     }
   }
 
-  void _handleEditDiary(
-    BuildContext context,
-    FeedProvider feedProvider,
-    DiaryModel diary
-  ) async {
-    final result = await _showEditDialog(context, diary);
-    
-    if (result != null && result.isNotEmpty) {
-      try {
-        await feedProvider.updateDiary(
-          diaryId: diary.id,
-          content: result,
-          title: diary.title,
-          shareType: diary.shareType,
-        );
-        
-        _showSuccessSnackBar('Diary updated successfully!');
-      } catch (e) {
-        _showErrorSnackBar('Failed to update diary: $e');
-      }
-    }
+void _handleEditDiary(
+  BuildContext context,
+  FeedProvider feedProvider,
+  DiaryModel diary
+) async {
+  final feedApiService = Provider.of<FeedApiService>(context, listen: false);
+  
+  final updatedDiary = await Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => EditDiaryFullScreen(
+        diary: diary,
+        onUpdate: (updatedDiary) async {
+          try {
+            // Update the diary with all fields
+            final result = await feedProvider.updateDiary(
+              diaryId: updatedDiary.id,
+              title: updatedDiary.title,
+              content: updatedDiary.content,
+              shareType: updatedDiary.shareType,
+              // Note: For media updates, you'll need additional API calls
+            );
+            
+            return result;
+          } catch (e) {
+            throw e;
+          }
+        },
+      ),
+    ),
+  );
+  
+  if (updatedDiary != null) {
+    _showSuccessSnackBar('Diary updated successfully!');
   }
+}
 
   Future<String?> _showEditDialog(BuildContext context, DiaryModel diary) async {
     final controller = TextEditingController(text: diary.content);

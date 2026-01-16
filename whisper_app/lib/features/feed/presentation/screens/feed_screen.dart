@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:whisper_space_flutter/features/auth/data/models/diary_model.dart';
 import 'package:whisper_space_flutter/features/feed/presentation/screens/create_diary_screen.dart';
+import 'package:whisper_space_flutter/features/feed/presentation/screens/edit_diary_full_screen.dart';
 import 'package:whisper_space_flutter/shared/widgets/diary_card.dart';
 
 import '../../data/datasources/feed_api_service.dart';
@@ -540,36 +541,47 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _handleEditDiary(
-    BuildContext context,
-    FeedProvider provider,
-    DiaryModel diary
-  ) async {
-    // Create a simple edit dialog since we don't have EditDiaryScreen yet
-    final result = await _showEditDialog(context, diary);
-    
-    if (result != null && result.isNotEmpty) {
-      try {
-        await provider.updateDiary(
-          diaryId: diary.id,
-          content: result,
-          title: diary.title, // Keep existing title
-          shareType: diary.shareType,
-        );
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Diary updated successfully!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } catch (e) {
-        _showErrorSnackBar('Failed to update diary: $e');
-      }
-    }
+void _handleEditDiary(
+  BuildContext context,
+  FeedProvider provider,
+  DiaryModel diary
+) async {
+  final feedApiService = Provider.of<FeedApiService>(context, listen: false);
+  
+  final updatedDiary = await Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => EditDiaryFullScreen(
+        diary: diary,
+        onUpdate: (updatedDiary) async {
+          try {
+            // Update the diary with all fields
+            final result = await provider.updateDiary(
+              diaryId: updatedDiary.id,
+              title: updatedDiary.title,
+              content: updatedDiary.content,
+              shareType: updatedDiary.shareType,
+              // Note: For media updates, you'll need additional API calls
+            );
+            
+            return result;
+          } catch (e) {
+            throw e;
+          }
+        },
+      ),
+    ),
+  );
+  
+  if (updatedDiary != null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Diary updated successfully!'),
+        backgroundColor: Colors.green,
+      ),
+    );
   }
+}
 
   Future<String?> _showEditDialog(BuildContext context, DiaryModel diary) async {
     final controller = TextEditingController(text: diary.content);

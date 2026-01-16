@@ -39,72 +39,79 @@ class DiaryModel extends Equatable {
 
   // Factory constructor for creating from JSON
   factory DiaryModel.fromJson(Map<String, dynamic> json) {
-    try {
-      return DiaryModel(
-        id: json['id'] as int? ?? 0,
-        author: json['author'] is Map<String, dynamic>
-            ? Author.fromJson(json['author'] as Map<String, dynamic>)
-            : const Author(id: 0, username: 'Unknown', avatarUrl: null),
-        title: (json['title'] as String?) ?? '',
-        content: (json['content'] as String?) ?? '',
-        shareType: (json['share_type'] as String?) ?? 'private',
-        groups: json['groups'] is List
-            ? (json['groups'] as List)
-                .map<Group>((g) => Group.fromJson(g as Map<String, dynamic>))
-                .toList()
-            : const [],
-        images: json['images'] is List
-            ? List<String>.from(json['images'] as List)
-            : const [],
-        videos: json['videos'] is List
-            ? List<String>.from(json['videos'] as List)
-            : const [],
-        videoThumbnails: json['video_thumbnails'] is List
-            ? List<String>.from(json['video_thumbnails'] as List)
-            : const [],
-        mediaType: (json['media_type'] as String?) ?? 'text',
-        likes: json['likes'] is List
-            ? (json['likes'] as List)
-                .map<DiaryLike>((l) => DiaryLike.fromJson(l as Map<String, dynamic>))
-                .toList()
-            : const [],
-        isDeleted: (json['is_deleted'] as bool?) ?? false,
-        createdAt: json['created_at'] is String
-            ? DateTime.parse(json['created_at'] as String)
-            : DateTime.now(),
-        updatedAt: json['updated_at'] is String
-            ? DateTime.parse(json['updated_at'] as String)
-            : DateTime.now(),
-        favoritedUserIds: json['favorited_user_ids'] is List
-            ? List<int>.from(json['favorited_user_ids'] as List)
-            : const [],
-        comments: json['comments'] is List
-            ? (json['comments'] as List)
-                .map<Comment>((c) => Comment.fromJson(c as Map<String, dynamic>))
-                .toList()
-            : const [],
-      );
-    } catch (e) {
-      return DiaryModel(
-        id: 0,
-        author: const Author(id: 0, username: 'Error', avatarUrl: null),
-        title: 'Error Diary',
-        content: 'Could not load this diary',
-        shareType: 'private',
-        groups: const [],
-        images: const [],
-        videos: const [],
-        videoThumbnails: const [],
-        mediaType: 'text',
-        likes: const [],
-        isDeleted: false,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-        favoritedUserIds: const [],
-        comments: const [],
-      );
+  try {
+    // Parse groups
+    List<Group> groups = [];
+    if (json['groups'] is List) {
+      groups = (json['groups'] as List).map<Group>((g) {
+        if (g is Map<String, dynamic>) {
+          return Group.fromJson(g);
+        }
+        return const Group(id: 0, name: 'Unknown Group', creatorId: 0);
+      }).toList();
     }
+
+    return DiaryModel(
+      id: json['id'] as int? ?? 0,
+      author: json['author'] is Map<String, dynamic>
+          ? Author.fromJson(json['author'] as Map<String, dynamic>)
+          : const Author(id: 0, username: 'Unknown', avatarUrl: null),
+      title: (json['title'] as String?) ?? '',
+      content: (json['content'] as String?) ?? '',
+      shareType: (json['share_type'] as String?) ?? 'private',
+      groups: groups, // This should now work
+      images: json['images'] is List
+          ? List<String>.from(json['images'] as List)
+          : const [],
+      videos: json['videos'] is List
+          ? List<String>.from(json['videos'] as List)
+          : const [],
+      videoThumbnails: json['video_thumbnails'] is List
+          ? List<String>.from(json['video_thumbnails'] as List)
+          : const [],
+      mediaType: (json['media_type'] as String?) ?? 'text',
+      likes: json['likes'] is List
+          ? (json['likes'] as List)
+              .map<DiaryLike>((l) => DiaryLike.fromJson(l as Map<String, dynamic>))
+              .toList()
+          : const [],
+      isDeleted: (json['is_deleted'] as bool?) ?? false,
+      createdAt: json['created_at'] is String
+          ? DateTime.parse(json['created_at'] as String)
+          : DateTime.now(),
+      updatedAt: json['updated_at'] is String
+          ? DateTime.parse(json['updated_at'] as String)
+          : DateTime.now(),
+      favoritedUserIds: json['favorited_user_ids'] is List
+          ? List<int>.from(json['favorited_user_ids'] as List)
+          : const [],
+      comments: json['comments'] is List
+          ? (json['comments'] as List)
+              .map<Comment>((c) => Comment.fromJson(c as Map<String, dynamic>))
+              .toList()
+          : const [],
+    );
+  } catch (e) {
+    return DiaryModel(
+      id: 0,
+      author: const Author(id: 0, username: 'Error', avatarUrl: null),
+      title: 'Error Diary',
+      content: 'Could not load this diary',
+      shareType: 'private',
+      groups: const [],
+      images: const [],
+      videos: const [],
+      videoThumbnails: const [],
+      mediaType: 'text',
+      likes: const [],
+      isDeleted: false,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+      favoritedUserIds: const [],
+      comments: const [],
+    );
   }
+}
 
   // Convert to JSON - SIMPLIFIED VERSION for local storage
   Map<String, dynamic> toJson() {
@@ -185,26 +192,69 @@ class Author extends Equatable {
 class Group extends Equatable {
   final int id;
   final String name;
+  final String? description;
+  final int creatorId;
 
   const Group({
     required this.id,
     required this.name,
+    this.description,
+    required this.creatorId,
   });
 
   factory Group.fromJson(Map<String, dynamic> json) {
     return Group(
       id: json['id'] as int? ?? 0,
       name: (json['name'] as String?) ?? 'Unknown Group',
+      description: json['description'] as String?,
+      creatorId: json['creator_id'] as int? ?? 0,
     );
   }
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
+        'description': description,
+        'creator_id': creatorId,
       };
 
   @override
-  List<Object?> get props => [id, name];
+  List<Object?> get props => [id, name, description, creatorId];
+}
+
+class GroupImage extends Equatable {
+  final int id;
+  final String url;
+  final int uploadedBy;
+  final DateTime createdAt;
+
+  const GroupImage({
+    required this.id,
+    required this.url,
+    required this.uploadedBy,
+    required this.createdAt,
+  });
+
+  factory GroupImage.fromJson(Map<String, dynamic> json) {
+    return GroupImage(
+      id: json['id'] as int? ?? 0,
+      url: (json['url'] as String?) ?? '',
+      uploadedBy: json['uploaded_by'] as int? ?? 0,
+      createdAt: json['created_at'] is String
+          ? DateTime.parse(json['created_at'] as String)
+          : DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'url': url,
+        'uploaded_by': uploadedBy,
+        'created_at': createdAt.toIso8601String(),
+      };
+
+  @override
+  List<Object?> get props => [id, url, uploadedBy, createdAt];
 }
 
 class DiaryLike extends Equatable {
