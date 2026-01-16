@@ -21,6 +21,12 @@ from app.crud.activity import create_activity
 
 def create_diary(db: Session, user_id: int, diary_in: DiaryCreate) -> Diary:
     
+    # Handle "private" -> "personal" conversion BEFORE creating ShareType
+    share_type_value = diary_in.share_type.lower()
+    if share_type_value == "private":
+        share_type_value = "personal"
+        print(f"Converting 'private' to 'personal' for ShareType enum")
+    
     # Handle images
     image_urls = []
     if diary_in.images:
@@ -95,12 +101,12 @@ def create_diary(db: Session, user_id: int, diary_in: DiaryCreate) -> Diary:
     else:
         media_type = 'text'
     
-    # Create diary
+    # Create diary - USE CONVERTED share_type_value
     diary = Diary(
         user_id=user_id,
         title=diary_in.title,
         content=diary_in.content,
-        share_type=ShareType(diary_in.share_type),
+        share_type=ShareType(share_type_value),  # Use converted value
         is_deleted=False,
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
@@ -113,8 +119,8 @@ def create_diary(db: Session, user_id: int, diary_in: DiaryCreate) -> Diary:
     db.add(diary)
     db.flush()
 
-    # Handle group sharing
-    if diary_in.share_type == "group" and diary_in.group_ids:
+    # Handle group sharing - Check the original share_type from request
+    if diary_in.share_type.lower() == "group" and diary_in.group_ids:
         diary_groups = [
             DiaryGroup(diary_id=diary.id, group_id=group_id)
             for group_id in diary_in.group_ids

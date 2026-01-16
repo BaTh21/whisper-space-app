@@ -25,14 +25,41 @@ class _CreateDiaryScreenState extends State<CreateDiaryScreen> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
   
-  String _shareType = 'private';
+  String _shareType = 'personal'; // Changed from 'private' to 'personal'
   final List<int> _selectedGroupIds = [];
   final List<File> _selectedImages = [];
   final List<File> _selectedVideos = [];
   
   bool _isLoading = false;
   bool _uploadingMedia = false;
+  bool _showGroupSelection = false;
+  bool _loadingGroups = false;
+  
+  List<Group> _availableGroups = [];
   final ImagePicker _imagePicker = ImagePicker();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserGroups();
+  }
+
+  Future<void> _loadUserGroups() async {
+    if (_loadingGroups) return;
+    
+    setState(() => _loadingGroups = true);
+    
+    try {
+      final groups = await widget.feedApiService.getUserGroups();
+      setState(() {
+        _availableGroups = groups;
+      });
+    } catch (e) {
+      print('Failed to load groups: $e');
+    } finally {
+      setState(() => _loadingGroups = false);
+    }
+  }
 
   Future<void> _pickImages() async {
     try {
@@ -87,109 +114,113 @@ class _CreateDiaryScreenState extends State<CreateDiaryScreen> {
     }
   }
 
-Future<void> _submitDiary() async {
-  if (!_formKey.currentState!.validate()) {
-    _showSnackBar('Please fix the errors in the form', isError: true);
-    return;
-  }
+  Future<void> _submitDiary() async {
+    if (!_formKey.currentState!.validate()) {
+      _showSnackBar('Please fix the errors in the form', isError: true);
+      return;
+    }
 
-  final title = _titleController.text.trim();
-  final content = _contentController.text.trim();
-  
-  if (title.isEmpty || content.isEmpty) {
-    _showSnackBar('Please enter both title and content', isError: true);
-    return;
-  }
-
-  if (title.length < 3) {
-    _showSnackBar('Title must be at least 3 characters', isError: true);
-    return;
-  }
-
-  if (content.length < 10) {
-    _showSnackBar('Content must be at least 10 characters', isError: true);
-    return;
-  }
-
-  setState(() => _isLoading = true);
-
-  try {
-    List<String> imageUrls = [];
-    List<String> videoUrls = [];
+    final title = _titleController.text.trim();
+    final content = _contentController.text.trim();
     
-    // Upload media if any
-    if (_selectedImages.isNotEmpty || _selectedVideos.isNotEmpty) {
-      setState(() => _uploadingMedia = true);
-      
-      // Upload images
-      for (int i = 0; i < _selectedImages.length; i++) {
-        final image = _selectedImages[i];
-        try {
-          _showSnackBar('Uploading image ${i + 1}/${_selectedImages.length}...', isError: false);
-          final url = await widget.feedApiService.uploadMedia(image, isVideo: false);
-          imageUrls.add(url);
-        } catch (e) {
-          print('Failed to upload image: $e');
-          // Continue with other images
-        }
+    if (title.isEmpty || content.isEmpty) {
+      _showSnackBar('Please enter both title and content', isError: true);
+      return;
+    }
+
+    if (title.length < 3) {
+      _showSnackBar('Title must be at least 3 characters', isError: true);
+      return;
+    }
+
+    if (content.length < 10) {
+      _showSnackBar('Content must be at least 10 characters', isError: true);
+      return;
+    }
+
+    // Validate group selection if share type is 'group'
+    if (_shareType == 'group') {
+      if (_selectedGroupIds.isEmpty) {
+        _showSnackBar('Please select at least one group', isError: true);
+        return;
       }
       
-      // Upload videos
-      for (int i = 0; i < _selectedVideos.length; i++) {
-        final video = _selectedVideos[i];
-        try {
-          _showSnackBar('Uploading video ${i + 1}/${_selectedVideos.length}...', isError: false);
-          final url = await widget.feedApiService.uploadMedia(video, isVideo: true);
-          videoUrls.add(url);
-        } catch (e) {
-          print('Failed to upload video: $e');
-          // Continue with other videos
+      if (_availableGroups.isEmpty) {
+        _showSnackBar('No groups available. Create a group first.', isError: true);
+        return;
+      }
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      List<String> imageUrls = [];
+      List<String> videoUrls = [];
+      
+      // Upload media if any
+      if (_selectedImages.isNotEmpty || _selectedVideos.isNotEmpty) {
+        setState(() => _uploadingMedia = true);
+        
+        // Upload images
+        for (int i = 0; i < _selectedImages.length; i++) {
+          final image = _selectedImages[i];
+          try {
+            final url = await widget.feedApiService.uploadMedia(image, isVideo: false);
+            imageUrls.add(url);
+          } catch (e) {
+            print('Failed to upload image: $e');
+            // Continue with other images
+          }
         }
+        
+        // Upload videos
+        for (int i = 0; i < _selectedVideos.length; i++) {
+          final video = _selectedVideos[i];
+          try {
+            final url = await widget.feedApiService.uploadMedia(video, isVideo: true);
+            videoUrls.add(url);
+          } catch (e) {
+            print('Failed to upload video: $e');
+            // Continue with other videos
+          }
+        }
+        
+        setState(() => _uploadingMedia = false);
       }
       
-      setState(() => _uploadingMedia = false);
+      // Create diary - FIXED: _shareType is already 'personal' for private diaries
+      final diary = await widget.feedApiService.createDiary(
+        title: title,
+        content: content,
+        shareType: _shareType, // 'personal', 'public', 'friends', 'group'
+        groupIds: _selectedGroupIds,
+        imageUrls: imageUrls,
+        videoUrls: videoUrls,
+      );
+      
+      // Show success message
+      _showSnackBar('✅ Diary created successfully!', isError: false);
+      
+      // Notify parent and close screen
+      if (widget.onDiaryCreated != null) {
+        widget.onDiaryCreated!(diary);
+      }
+      
+      // Close the screen and return the created diary
+      if (mounted) {
+        Navigator.of(context).pop(diary);
+      }
+      
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _uploadingMedia = false;
+      });
+      
+      print('Create diary error: $e');
+      _showSnackBar('Failed to create diary: ${e.toString()}', isError: true);
     }
-    
-    // Create diary
-    _showSnackBar('Creating diary...', isError: false);
-    
-    final diary = await widget.feedApiService.createDiary(
-      title: title,
-      content: content,
-      shareType: _shareType,
-      groupIds: _selectedGroupIds.isNotEmpty ? _selectedGroupIds : null,
-      imageUrls: imageUrls.isNotEmpty ? imageUrls : null,
-      videoUrls: videoUrls.isNotEmpty ? videoUrls : null,
-    );
-    
-    // Wait a bit for the success message to show
-    await Future.delayed(const Duration(milliseconds: 500));
-    
-    // Show final success message
-    _showSnackBar('✅ Diary created successfully!', isError: false);
-    
-    // Wait a bit more for user to see success
-    await Future.delayed(const Duration(milliseconds: 1000));
-    
-    // IMPORTANT: Notify parent and close screen
-    if (widget.onDiaryCreated != null) {
-      widget.onDiaryCreated!(diary);
-    }
-    
-    // Close the screen and return the created diary
-    if (mounted) {
-      Navigator.of(context).pop(diary);
-    }
-    
-  } catch (e) {
-    setState(() {
-      _isLoading = false;
-      _uploadingMedia = false;
-    });
-    
-    _showSnackBar('Failed to create diary: ${e.toString()}', isError: true);
   }
-}
 
   void _showSnackBar(String message, {required bool isError}) {
     if (!mounted) return;
@@ -200,6 +231,110 @@ Future<void> _submitDiary() async {
         backgroundColor: isError ? Colors.red : Colors.green,
         duration: const Duration(seconds: 3),
       ),
+    );
+  }
+
+  Widget _buildGroupSelectionSection() {
+    if (!_showGroupSelection) return const SizedBox.shrink();
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            const Text(
+              'Select Groups:',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const Spacer(),
+            if (_loadingGroups)
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              IconButton(
+                icon: const Icon(Icons.refresh, size: 20),
+                onPressed: _loadUserGroups,
+                tooltip: 'Refresh groups',
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        
+        if (_availableGroups.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              children: [
+                const Icon(Icons.group, size: 48, color: Colors.grey),
+                const SizedBox(height: 8),
+                const Text(
+                  'No groups available',
+                  style: TextStyle(color: Colors.grey, fontSize: 14),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Create a group first or join existing ones',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                ),
+              ],
+            ),
+          )
+        else
+          Column(
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _availableGroups.map((group) {
+                  final isSelected = _selectedGroupIds.contains(group.id);
+                  return FilterChip(
+                    label: Text(group.name),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      setState(() {
+                        if (selected) {
+                          _selectedGroupIds.add(group.id);
+                        } else {
+                          _selectedGroupIds.remove(group.id);
+                        }
+                      });
+                    },
+                    selectedColor: Colors.blue.shade100,
+                    checkmarkColor: Colors.blue,
+                    avatar: CircleAvatar(
+                      backgroundColor: isSelected ? Colors.blue : Colors.grey.shade300,
+                      radius: 12,
+                      child: Text(
+                        group.name.substring(0, 1).toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isSelected ? Colors.white : Colors.black,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              
+              if (_selectedGroupIds.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Selected: ${_selectedGroupIds.length} group(s)',
+                  style: TextStyle(
+                    color: Colors.green.shade700,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ],
+          ),
+      ],
     );
   }
 
@@ -260,6 +395,8 @@ Future<void> _submitDiary() async {
                       labelText: 'Title *',
                       hintText: 'Give your diary a title',
                       border: OutlineInputBorder(),
+                      filled: true,
+                      fillColor: Colors.white,
                     ),
                     maxLength: 255,
                     validator: (value) {
@@ -283,6 +420,8 @@ Future<void> _submitDiary() async {
                       hintText: 'Write your thoughts here...',
                       border: OutlineInputBorder(),
                       alignLabelWithHint: true,
+                      filled: true,
+                      fillColor: Colors.white,
                     ),
                     maxLines: 8,
                     minLines: 4,
@@ -299,54 +438,106 @@ Future<void> _submitDiary() async {
                   
                   const SizedBox(height: 16),
                   
-                  // Share Type
+                  // Share Type - UPDATED: Show "Private" but use value "personal"
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Privacy:', style: TextStyle(fontWeight: FontWeight.bold)),
+                      const Text(
+                        'Privacy:',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
                       const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: RadioListTile<String>(
-                              title: const Text('Private'),
-                              value: 'private',
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(8),
+                          color: Colors.grey.shade50,
+                        ),
+                        child: Column(
+                          children: [
+                            RadioListTile<String>(
+                              title: const Row(
+                                children: [
+                                  Icon(Icons.lock, size: 20, color: Colors.red),
+                                  SizedBox(width: 8),
+                                  Text('Private'), // UI shows "Private"
+                                ],
+                              ),
+                              subtitle: const Text('Only you can see this'),
+                              value: 'personal', // But value is 'personal' for backend
                               groupValue: _shareType,
                               onChanged: _isLoading ? null : (value) {
-                                setState(() => _shareType = value!);
+                                setState(() {
+                                  _shareType = value!;
+                                  _showGroupSelection = false;
+                                });
                               },
                             ),
-                          ),
-                          Expanded(
-                            child: RadioListTile<String>(
-                              title: const Text('Public'),
+                            Divider(height: 1, color: Colors.grey.shade300),
+                            RadioListTile<String>(
+                              title: const Row(
+                                children: [
+                                  Icon(Icons.public, size: 20, color: Colors.green),
+                                  SizedBox(width: 8),
+                                  Text('Public'),
+                                ],
+                              ),
+                              subtitle: const Text('Everyone can see this'),
                               value: 'public',
                               groupValue: _shareType,
                               onChanged: _isLoading ? null : (value) {
-                                setState(() => _shareType = value!);
+                                setState(() {
+                                  _shareType = value!;
+                                  _showGroupSelection = false;
+                                });
                               },
                             ),
-                          ),
-                        ],
-                      ),
-                      RadioListTile<String>(
-                        title: const Text('Friends'),
-                        value: 'friends',
-                        groupValue: _shareType,
-                        onChanged: _isLoading ? null : (value) {
-                          setState(() => _shareType = value!);
-                        },
-                      ),
-                      RadioListTile<String>(
-                        title: const Text('Group'),
-                        value: 'group',
-                        groupValue: _shareType,
-                        onChanged: _isLoading ? null : (value) {
-                          setState(() => _shareType = value!);
-                        },
+                            Divider(height: 1, color: Colors.grey.shade300),
+                            RadioListTile<String>(
+                              title: const Row(
+                                children: [
+                                  Icon(Icons.people, size: 20, color: Colors.blue),
+                                  SizedBox(width: 8),
+                                  Text('Friends'),
+                                ],
+                              ),
+                              subtitle: const Text('Only your friends can see this'),
+                              value: 'friends',
+                              groupValue: _shareType,
+                              onChanged: _isLoading ? null : (value) {
+                                setState(() {
+                                  _shareType = value!;
+                                  _showGroupSelection = false;
+                                });
+                              },
+                            ),
+                            Divider(height: 1, color: Colors.grey.shade300),
+                            RadioListTile<String>(
+                              title: const Row(
+                                children: [
+                                  Icon(Icons.group, size: 20, color: Colors.purple),
+                                  SizedBox(width: 8),
+                                  Text('Selected Groups'),
+                                ],
+                              ),
+                              subtitle: const Text('Only selected groups can see this'),
+                              value: 'group',
+                              groupValue: _shareType,
+                              onChanged: _isLoading ? null : (value) {
+                                setState(() {
+                                  _shareType = value!;
+                                  _showGroupSelection = true;
+                                });
+                              },
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
+                  
+                  // Group Selection (only shown when 'group' is selected)
+                  _buildGroupSelectionSection(),
                   
                   const SizedBox(height: 16),
                   
@@ -354,20 +545,33 @@ Future<void> _submitDiary() async {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Media (optional):', style: TextStyle(fontWeight: FontWeight.bold)),
+                      const Text(
+                        'Media (optional):',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          ElevatedButton.icon(
-                            onPressed: _isLoading ? null : _pickImages,
-                            icon: const Icon(Icons.photo),
-                            label: const Text('Add Photos'),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _isLoading ? null : _pickImages,
+                              icon: const Icon(Icons.photo_library),
+                              label: const Text('Add Photos'),
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                            ),
                           ),
                           const SizedBox(width: 8),
-                          ElevatedButton.icon(
-                            onPressed: _isLoading ? null : _pickVideo,
-                            icon: const Icon(Icons.videocam),
-                            label: const Text('Add Video'),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _isLoading ? null : _pickVideo,
+                              icon: const Icon(Icons.video_library),
+                              label: const Text('Add Video'),
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -375,7 +579,8 @@ Future<void> _submitDiary() async {
                       // Selected Images
                       if (_selectedImages.isNotEmpty) ...[
                         const SizedBox(height: 16),
-                        const Text('Selected Images:'),
+                        const Text('Selected Images:', style: TextStyle(fontWeight: FontWeight.w500)),
+                        const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
@@ -384,11 +589,19 @@ Future<void> _submitDiary() async {
                             final image = entry.value;
                             return Stack(
                               children: [
-                                Image.file(
-                                  image,
+                                Container(
                                   width: 80,
                                   height: 80,
-                                  fit: BoxFit.cover,
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.grey.shade300),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Image.file(
+                                    image,
+                                    width: 80,
+                                    height: 80,
+                                    fit: BoxFit.cover,
+                                  ),
                                 ),
                                 Positioned(
                                   top: 0,
@@ -400,8 +613,16 @@ Future<void> _submitDiary() async {
                                       });
                                     },
                                     child: Container(
-                                      color: Colors.red,
-                                      child: const Icon(Icons.close, size: 16, color: Colors.white),
+                                      padding: const EdgeInsets.all(2),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.red,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.close,
+                                        size: 14,
+                                        color: Colors.white,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -414,21 +635,40 @@ Future<void> _submitDiary() async {
                       // Selected Videos
                       if (_selectedVideos.isNotEmpty) ...[
                         const SizedBox(height: 16),
-                        const Text('Selected Videos:'),
+                        const Text('Selected Videos:', style: TextStyle(fontWeight: FontWeight.w500)),
+                        const SizedBox(height: 8),
                         Column(
                           children: _selectedVideos.asMap().entries.map((entry) {
                             final index = entry.key;
                             final video = entry.value;
-                            return ListTile(
-                              leading: const Icon(Icons.videocam),
-                              title: Text(video.path.split('/').last),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.close),
-                                onPressed: () {
-                                  setState(() {
-                                    _selectedVideos.removeAt(index);
-                                  });
-                                },
+                            return Card(
+                              child: ListTile(
+                                leading: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.shade50,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Icon(Icons.videocam, color: Colors.green),
+                                ),
+                                title: Text(
+                                  video.path.split('/').last,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: Text(
+                                  'Video',
+                                  style: TextStyle(color: Colors.grey.shade600),
+                                ),
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.close, color: Colors.red),
+                                  onPressed: () {
+                                    setState(() {
+                                      _selectedVideos.removeAt(index);
+                                    });
+                                  },
+                                ),
                               ),
                             );
                           }).toList(),
@@ -445,6 +685,10 @@ Future<void> _submitDiary() async {
                     height: 50,
                     child: ElevatedButton(
                       onPressed: _isLoading ? null : _submitDiary,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).primaryColor,
+                        foregroundColor: Colors.white,
+                      ),
                       child: _isLoading
                           ? const CircularProgressIndicator(color: Colors.white)
                           : const Text('Create Diary', style: TextStyle(fontSize: 16)),

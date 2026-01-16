@@ -20,63 +20,69 @@ class FeedApiService {
   }
 
   // ============ CREATE DIARY ============
-  Future<DiaryModel> createDiary({
-    required String title,
-    required String content,
-    String shareType = 'private',
-    List<int>? groupIds,
-    List<String>? imageUrls,
-    List<String>? videoUrls,
-  }) async {
-    _log('createDiary() - "$title", shareType: $shareType');
-    
-    try {
-      final token = storageService.getToken();
-      if (token == null) {
-        throw Exception('Not authenticated. Please login again.');
-      }
-
-      _log('🔑 Token exists: ${token.length} chars');
-      
-      // Prepare request
-      final request = {
-        'title': title,
-        'content': content,
-        'share_type': shareType,
-        if (groupIds != null && groupIds.isNotEmpty) 'group_ids': groupIds,
-        if (imageUrls != null && imageUrls.isNotEmpty) 'images': imageUrls,
-        if (videoUrls != null && videoUrls.isNotEmpty) 'videos': videoUrls,
-      };
-
-      _log('📤 Creating diary...');
-      
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/v1/diaries/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(request),
-      ).timeout(const Duration(seconds: 30));
-
-      _log('📥 Response: ${response.statusCode}');
-      
-      if (response.statusCode == 201) {
-        final data = jsonDecode(response.body);
-        final diary = DiaryModel.fromJson(data);
-        
-        _log('✅ Diary created with ID: ${diary.id}');
-        
-        return diary;
-      } else {
-        _log('❌ API Error: ${response.body}');
-        throw Exception('Failed to create diary: ${response.statusCode} - ${response.body}');
-      }
-    } catch (e) {
-      _log('❌ Error creating diary: $e');
-      rethrow;
+Future<DiaryModel> createDiary({
+  required String title,
+  required String content,
+  String shareType = 'private', // Frontend can still use "private"
+  List<int>? groupIds,
+  List<String>? imageUrls,
+  List<String>? videoUrls,
+}) async {
+  _log('createDiary() - "$title", shareType: $shareType');
+  
+  try {
+    final token = storageService.getToken();
+    if (token == null) {
+      throw Exception('Not authenticated. Please login again.');
     }
+
+    // CRITICAL FIX: Convert "private" to "personal" for backend
+    String backendShareType = shareType.toLowerCase();
+    if (backendShareType == 'private') {
+      backendShareType = 'personal'; // Backend expects "personal"
+    }
+
+    // Prepare request
+    final request = {
+      'title': title.trim(),
+      'content': content.trim(),
+      'share_type': backendShareType, // Use converted value
+      'group_ids': groupIds ?? [],
+      'images': imageUrls ?? [],
+      'videos': videoUrls ?? [],
+    };
+
+    _log('📤 Creating diary with data: ${jsonEncode(request)}');
+    
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/diaries/'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(request),
+    ).timeout(const Duration(seconds: 30));
+
+    _log('📥 Response: ${response.statusCode}');
+    
+    if (response.statusCode == 201) {
+      final data = jsonDecode(response.body);
+      final diary = DiaryModel.fromJson(data);
+      
+      _log('✅ Diary created with ID: ${diary.id}');
+      
+      return diary;
+    } else {
+      _log('❌ API Error: ${response.body}');
+      throw Exception('Failed to create diary: ${response.statusCode}');
+    }
+  } catch (e) {
+    _log('❌ Error creating diary: $e');
+    rethrow;
   }
+}
+
+
 
   // ============ GET FEED ============
   Future<List<DiaryModel>> getFeed({
@@ -430,21 +436,33 @@ Future<DiaryModel> updateDiary({
   List<String>? imageUrls,
   List<String>? videoUrls,
 }) async {
+  _log('updateDiary() - diaryId: $diaryId, shareType: $shareType');
+  
   try {
     final token = storageService.getToken();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Not authenticated.');
     }
 
-    final request = {
-      if (title != null) 'title': title,
-      if (content != null) 'content': content,
-      if (shareType != null) 'share_type': shareType,
-      if (groupIds != null) 'group_ids': groupIds,
-      if (imageUrls != null) 'images': imageUrls,
-      if (videoUrls != null) 'videos': videoUrls,
-    };
+    // Prepare request
+    final Map<String, dynamic> request = {};
+    
+    if (title != null) request['title'] = title.trim();
+    if (content != null) request['content'] = content.trim();
+    if (shareType != null) {
+      // CRITICAL FIX: Convert "private" to "personal" for backend
+      String backendShareType = shareType.toLowerCase();
+      if (backendShareType == 'private') {
+        backendShareType = 'personal';
+      }
+      request['share_type'] = backendShareType;
+    }
+    if (groupIds != null) request['group_ids'] = groupIds;
+    if (imageUrls != null) request['images'] = imageUrls;
+    if (videoUrls != null) request['videos'] = videoUrls;
 
+    _log('📤 Updating diary with data: ${jsonEncode(request)}');
+    
     final response = await http.patch(
       Uri.parse('$baseUrl/api/v1/diaries/$diaryId'),
       headers: {
@@ -452,12 +470,15 @@ Future<DiaryModel> updateDiary({
         'Authorization': 'Bearer $token',
       },
       body: jsonEncode(request),
-    );
+    ).timeout(const Duration(seconds: 30));
 
+    _log('📥 Response: ${response.statusCode}');
+    
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       return DiaryModel.fromJson(data);
     } else {
+      _log('❌ API Error: ${response.body}');
       throw Exception('Failed to update diary: ${response.statusCode}');
     }
   } catch (e) {
@@ -478,6 +499,44 @@ Future<void> deleteDiary(int diaryId) async {
   } catch (e) {
     _log('Error deleting diary: $e');
     rethrow;
+  }
+}
+
+ Future<List<Group>> getUserGroups() async {
+  _log('getUserGroups()');
+  
+  try {
+    final token = storageService.getToken();
+    if (token == null) {
+      _log('❌ No auth token');
+      return [];
+    }
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/v1/groups/my'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    ).timeout(const Duration(seconds: 10));
+
+    _log('📥 Groups response: ${response.statusCode}');
+    
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      final groups = data.map<Group>((json) {
+        return Group.fromJson(json);
+      }).toList();
+      
+      _log('✅ Got ${groups.length} groups from API');
+      return groups;
+    } else {
+      _log('❌ API Error ${response.statusCode}: ${response.body}');
+      return [];
+    }
+  } catch (e) {
+    _log('❌ Network error: $e');
+    return [];
   }
 }
 }

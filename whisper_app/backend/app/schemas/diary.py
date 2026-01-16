@@ -21,9 +21,9 @@ class DiaryLikeResponse(BaseModel):
     user: CreatorResponse
 
 class DiaryCreate(BaseModel):
-    title: Optional[str] = Field(None, max_length=255)
-    content: Optional[str] = None
-    share_type: str = Field(..., pattern="^(public|friends|group|personal)$")
+    title: str = Field(..., max_length=255)
+    content: str = Field(...)
+    share_type: str = Field(..., pattern="^(public|friends|group|personal|private)$")
     group_ids: Optional[List[int]] = None
     images: Optional[List[str]] = Field(None, max_length=10)
     videos: Optional[List[str]] = Field(None, max_length=3)
@@ -31,8 +31,14 @@ class DiaryCreate(BaseModel):
     @field_validator('share_type', mode='before')
     @classmethod
     def normalize_share_type(cls, v):
+        """Convert 'private' to 'personal' and validate"""
         if isinstance(v, str):
-            return v.strip().lower()
+            v = v.strip().lower()
+            # Accept "private" but don't convert it here
+            # Let the CRUD function handle conversion
+            allowed_values = ["public", "friends", "group", "personal", "private"]
+            if v not in allowed_values:
+                raise ValueError(f'share_type must be one of: {allowed_values}')
         return v
     
     @field_validator('images', 'videos', mode='before')
