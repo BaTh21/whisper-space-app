@@ -233,14 +233,18 @@ class DiaryLike extends Equatable {
 }
 
 class Comment extends Equatable {
+  final int id;
   final String content;
   final DateTime createdAt;
   final Author user;
   final List<String> images;
   final int? parentId;
   final List<Comment> replies;
+  final int diaryId;
 
   const Comment({
+    required this.id,
+    required this.diaryId,
     required this.content,
     required this.createdAt,
     required this.user,
@@ -251,6 +255,8 @@ class Comment extends Equatable {
 
   factory Comment.fromJson(Map<String, dynamic> json) {
     return Comment(
+      id: json['id'] as int? ?? 0,
+      diaryId: json['diary_id'] as int? ?? 0,
       content: (json['content'] as String?) ?? '',
       createdAt: json['created_at'] is String
           ? DateTime.parse(json['created_at'] as String)
@@ -269,6 +275,7 @@ class Comment extends Equatable {
   }
 
   Map<String, dynamic> toJson() => {
+        'id': id,
         'content': content,
         'created_at': createdAt.toIso8601String(),
         'user': user.toJson(),
@@ -279,6 +286,7 @@ class Comment extends Equatable {
 
   @override
   List<Object?> get props => [
+        id,
         content,
         createdAt,
         user,

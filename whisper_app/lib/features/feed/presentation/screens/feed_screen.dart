@@ -20,18 +20,28 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   bool _showCreateButton = true;
   bool _showNewDiaryNotificationBanner = false;
   DiaryModel? _latestNewDiary;
+  int? _currentUserId;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_onScroll);
+    _loadCurrentUser();
+  }
+
+  void _loadCurrentUser() {
+    // TODO: Load current user ID from your AuthProvider
+    // Replace this with your actual user ID retrieval
+    // Example:
+    // final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    // _currentUserId = authProvider.currentUser?.id;
+    _currentUserId = 1; // Temporary - replace with actual user ID
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // Reconnect WebSocket when app resumes
       final provider = Provider.of<FeedProvider>(context, listen: false);
       provider.reconnectWebSocket();
     }
@@ -40,7 +50,6 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   void _onScroll() {
     final currentScroll = _scrollController.position.pixels;
     
-    // Show/hide create button based on scroll position
     if (currentScroll > 100 && _showCreateButton) {
       setState(() => _showCreateButton = false);
     } else if (currentScroll <= 100 && !_showCreateButton) {
@@ -55,7 +64,6 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
         _latestNewDiary = diary;
       });
 
-      // Auto-hide notification after 5 seconds
       Future.delayed(const Duration(seconds: 5), () {
         if (mounted) {
           setState(() {
@@ -77,12 +85,16 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Consumer<FeedProvider>(
       builder: (context, provider, child) {
-        // Show loading state
+        // Set current user ID in provider
+        if (_currentUserId != null) {
+          // FeedProvider should have a method to set current user ID
+          // If not, you need to add it to FeedProvider
+        }
+
         if (provider.isLoading && provider.diaries.isEmpty) {
           return _buildLoadingScreen(provider);
         }
 
-        // Show error state
         if (provider.error != null && provider.diaries.isEmpty) {
           return _buildErrorScreen(provider);
         }
@@ -93,26 +105,22 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
               children: [
                 const Text('Whisper Space'),
                 const SizedBox(width: 8),
-                // WebSocket status indicator
                 _buildWebSocketIndicator(provider),
               ],
             ),
             elevation: 0,
             actions: [
-              // WebSocket reconnect button
               if (!provider.isWsConnected && !provider.isWsConnecting)
                 IconButton(
                   icon: const Icon(Icons.wifi_off, color: Colors.orange),
                   tooltip: 'Reconnect to real-time updates',
                   onPressed: () => provider.reconnectWebSocket(),
                 ),
-              // Refresh button
               IconButton(
                 icon: const Icon(Icons.refresh),
                 tooltip: 'Refresh feed',
                 onPressed: () => provider.refreshFeed(),
               ),
-              // Create button in app bar
               IconButton(
                 icon: const Icon(Icons.add),
                 tooltip: 'Create New Diary',
@@ -122,13 +130,11 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
           ),
           body: Stack(
             children: [
-              // Main content
               RefreshIndicator(
                 onRefresh: () => provider.refreshFeed(),
                 child: _buildFeedContent(provider),
               ),
               
-              // New diary notification
               if (_showNewDiaryNotificationBanner && _latestNewDiary != null)
                 Positioned(
                   top: MediaQuery.of(context).padding.top + 8,
@@ -137,7 +143,6 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                   child: _buildNewDiaryNotification(_latestNewDiary!),
                 ),
               
-              // Fixed Create Button at bottom
               if (_showCreateButton && provider.diaries.isNotEmpty)
                 Positioned(
                   bottom: 16,
@@ -147,10 +152,8 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                 ),
             ],
           ),
-          // Floating Action Button
           floatingActionButton: _buildFloatingActionButton(context, provider),
           
-          // Bottom Navigation Bar
           bottomNavigationBar: _buildBottomNavigationBar(context, provider),
         );
       },
@@ -250,7 +253,6 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
               child: const Text('Create First Diary'),
             ),
             const SizedBox(height: 20),
-            // WebSocket status in empty state
             _buildWebSocketStatusText(provider),
           ],
         ),
@@ -263,11 +265,28 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       itemCount: provider.diaries.length,
       itemBuilder: (context, index) {
         final diary = provider.diaries[index];
+        final isOwner = diary.author.id == _currentUserId;
+        
         return DiaryCard(
           diary: diary,
-          onLike: () => provider.likeDiary(diary.id),
-          onFavorite: () => provider.saveToFavorites(diary.id),
-          onComment: () => _showComments(context, diary),
+          onLike: () => _handleLike(provider, diary.id),
+          onFavorite: () => _handleFavorite(provider, diary.id, isOwner),
+          onComment: (diaryId, content) => _handleComment(
+            provider, 
+            diaryId, 
+            content
+          ),
+          onEdit: (diaryToEdit) => _handleEditDiary(
+            context, 
+            provider, 
+            diaryToEdit
+          ),
+          onDelete: (diaryId) => _handleDeleteDiary(
+            context, 
+            provider, 
+            diaryId
+          ),
+          isOwner: isOwner,
         );
       },
     );
@@ -311,12 +330,15 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
         child: Row(
           children: [
             CircleAvatar(
-              backgroundImage: diary.author.avatarUrl != null && diary.author.avatarUrl!.isNotEmpty
+              backgroundImage: diary.author.avatarUrl != null && 
+                  diary.author.avatarUrl!.isNotEmpty
                   ? NetworkImage(diary.author.avatarUrl!)
                   : null,
               radius: 20,
-              child: diary.author.avatarUrl == null || diary.author.avatarUrl!.isEmpty
-                  ? Text(diary.author.username.isNotEmpty ? diary.author.username[0] : '?')
+              child: diary.author.avatarUrl == null || 
+                  diary.author.avatarUrl!.isEmpty
+                  ? Text(diary.author.username.isNotEmpty ? 
+                      diary.author.username[0] : '?')
                   : null,
             ),
             const SizedBox(width: 12),
@@ -336,7 +358,10 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                       diary.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      style: const TextStyle(
+                        fontSize: 12, 
+                        color: Colors.grey
+                      ),
                     ),
                 ],
               ),
@@ -400,7 +425,10 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                 Badge(
                   backgroundColor: Colors.red,
                   label: Text('${provider.diaries.length}'),
-                  child: const Icon(Icons.article_outlined, color: Colors.white),
+                  child: const Icon(
+                    Icons.article_outlined, 
+                    color: Colors.white
+                  ),
                 ),
               ],
             ),
@@ -419,7 +447,6 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       ),
       child: Row(
         children: [
-          // Home Button
           Expanded(
             child: IconButton(
               icon: const Icon(Icons.home, size: 28),
@@ -436,7 +463,6 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
             ),
           ),
           
-          // Create Button (Big Center Button)
           Expanded(
             flex: 2,
             child: Container(
@@ -461,21 +487,165 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
             ),
           ),
           
-          // Profile Button
           Expanded(
             child: IconButton(
               icon: const Icon(Icons.person, size: 28),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Profile page coming soon!')),
-                );
-              },
+              onPressed: _navigateToProfile,
               tooltip: 'Profile',
             ),
           ),
         ],
       ),
     );
+  }
+
+  // ============ EVENT HANDLERS ============
+
+  void _handleLike(FeedProvider provider, int diaryId) async {
+    try {
+      await provider.likeDiary(diaryId);
+    } catch (e) {
+      _showErrorSnackBar('Failed to like diary: $e');
+    }
+  }
+
+  void _handleFavorite(FeedProvider provider, int diaryId, bool isOwner) async {
+    try {
+      // Check if already favorited
+      final diary = provider.diaries.firstWhere((d) => d.id == diaryId);
+      final isCurrentlyFavorited = diary.favoritedUserIds.contains(_currentUserId);
+
+      if (isCurrentlyFavorited) {
+        await provider.removeFromFavorites(diaryId);
+      } else {
+        await provider.saveToFavorites(diaryId);
+      }
+    } catch (e) {
+      _showErrorSnackBar('Failed to update favorites: $e');
+    }
+  }
+
+  void _handleComment(
+    FeedProvider provider, 
+    int diaryId, 
+    String content
+  ) async {
+    try {
+      await provider.createComment(
+        diaryId: diaryId,
+        content: content,
+      );
+    } catch (e) {
+      _showErrorSnackBar('Failed to post comment: $e');
+    }
+  }
+
+  void _handleEditDiary(
+    BuildContext context,
+    FeedProvider provider,
+    DiaryModel diary
+  ) async {
+    // Create a simple edit dialog since we don't have EditDiaryScreen yet
+    final result = await _showEditDialog(context, diary);
+    
+    if (result != null && result.isNotEmpty) {
+      try {
+        await provider.updateDiary(
+          diaryId: diary.id,
+          content: result,
+          title: diary.title, // Keep existing title
+          shareType: diary.shareType,
+        );
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Diary updated successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        _showErrorSnackBar('Failed to update diary: $e');
+      }
+    }
+  }
+
+  Future<String?> _showEditDialog(BuildContext context, DiaryModel diary) async {
+    final controller = TextEditingController(text: diary.content);
+    
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Diary'),
+        content: TextField(
+          controller: controller,
+          maxLines: 5,
+          decoration: const InputDecoration(
+            hintText: 'Edit your diary content...',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleDeleteDiary(
+    BuildContext context,
+    FeedProvider provider,
+    int diaryId
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Diary'),
+        content: const Text(
+          'Are you sure you want to delete this diary? '
+          'This action cannot be undone.'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await provider.deleteDiary(diaryId);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Diary deleted successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          _showErrorSnackBar('Failed to delete diary: $e');
+        }
+      }
+    }
   }
 
   void _createNewPost(BuildContext context, FeedProvider provider) {
@@ -487,11 +657,12 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
         builder: (context) => CreateDiaryScreen(
           feedApiService: feedApiService,
           onDiaryCreated: (DiaryModel diary) {
-            // The diary will be added via WebSocket, but we can add it locally too
             provider.diaries.insert(0, diary);
-            provider.myDiaries.insert(0, diary);
+            // Only add to myDiaries if it's the current user's diary
+            if (diary.author.id == _currentUserId) {
+              provider.myDiaries.insert(0, diary);
+            }
             
-            // Show success message
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Diary created successfully!'),
@@ -500,7 +671,6 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
               ),
             );
             
-            // Auto-scroll to top
             if (_scrollController.hasClients) {
               _scrollController.animateTo(
                 0,
@@ -509,7 +679,6 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
               );
             }
             
-            // Show notification
             _showNotificationForNewDiary(diary);
           },
         ),
@@ -517,136 +686,22 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     );
   }
 
-  void _showComments(BuildContext context, DiaryModel diary) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.7,
-          maxChildSize: 0.9,
-          minChildSize: 0.5,
-          builder: (context, scrollController) {
-            return Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Comments (${diary.comments.length})',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: diary.comments.isEmpty
-                      ? const Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.comment, size: 64, color: Colors.grey),
-                              SizedBox(height: 16),
-                              Text(
-                                'No comments yet',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                              Text(
-                                'Be the first to comment!',
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                        )
-                      : ListView.builder(
-                          controller: scrollController,
-                          itemCount: diary.comments.length,
-                          itemBuilder: (context, index) {
-                            final comment = diary.comments[index];
-                            return ListTile(
-                              leading: CircleAvatar(
-                                backgroundImage: comment.user.avatarUrl != null && 
-                                                comment.user.avatarUrl!.isNotEmpty
-                                    ? NetworkImage(comment.user.avatarUrl!)
-                                    : null,
-                                child: comment.user.avatarUrl == null || 
-                                       comment.user.avatarUrl!.isEmpty
-                                    ? Text(comment.user.username.isNotEmpty 
-                                        ? comment.user.username[0] 
-                                        : '?')
-                                    : null,
-                              ),
-                              title: Text(comment.user.username),
-                              subtitle: Text(comment.content),
-                              trailing: Text(
-                                _formatDate(comment.createdAt),
-                                style: const TextStyle(fontSize: 12, color: Colors.grey),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    border: Border(top: BorderSide(color: Colors.grey.shade300)),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          decoration: const InputDecoration(
-                            hintText: 'Add a comment...',
-                            border: InputBorder.none,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.send),
-                        onPressed: () {
-                          // TODO: Implement comment sending
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
+  void _navigateToProfile() {
+    // TODO: Implement profile navigation
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Profile page coming soon!')),
     );
   }
 
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-    
-    if (difference.inDays > 365) {
-      return '${difference.inDays ~/ 365}y ago';
-    } else if (difference.inDays > 30) {
-      return '${difference.inDays ~/ 30}mo ago';
-    } else if (difference.inDays > 0) {
-      return '${difference.inDays}d ago';
-    } else if (difference.inHours > 0) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes}m ago';
-    } else {
-      return 'Just now';
+  void _showErrorSnackBar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
   }
 }

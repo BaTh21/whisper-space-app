@@ -19,6 +19,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  int? _currentUserId; // Store current user ID
 
   final List<Widget> _screens = [
     const FeedTab(),
@@ -35,6 +36,25 @@ class _HomeScreenState extends State<HomeScreen> {
     'Notes',
     'Profile',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentUser();
+  }
+
+  void _loadCurrentUser() {
+    // Current user ID will be loaded from AuthProvider
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final user = authProvider.currentUser;
+      if (user != null) {
+        setState(() {
+          _currentUserId = user.id;
+        });
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -66,8 +86,6 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: _buildBottomNavBar(),
       // ADDED: FloatingActionButton that's always visible on Feed tab
       floatingActionButton: _selectedIndex == 0 ? _buildFloatingActionButton(context) : null,
-      // ADDED: Persistent Create button at bottom for Feed tab
-      persistentFooterAlignment: AlignmentDirectional.center,
     );
   }
 
@@ -191,12 +209,26 @@ class _FeedTabState extends State<FeedTab> {
   final ScrollController _scrollController = ScrollController();
   bool _isInitialized = false;
   bool _showCreateButton = true;
+  int? _currentUserId;
 
   @override
   void initState() {
     super.initState();
     _initialize();
     _scrollController.addListener(_onScroll);
+    _loadCurrentUser();
+  }
+
+  void _loadCurrentUser() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final user = authProvider.currentUser;
+      if (user != null) {
+        setState(() {
+          _currentUserId = user.id;
+        });
+      }
+    });
   }
 
   Future<void> _initialize() async {
@@ -290,11 +322,28 @@ class _FeedTabState extends State<FeedTab> {
                       itemCount: feedProvider.diaries.length,
                       itemBuilder: (context, index) {
                         final diary = feedProvider.diaries[index];
+                        final isOwner = diary.author.id == _currentUserId;
+                        
                         return DiaryCard(
                           diary: diary,
-                          onLike: () => feedProvider.likeDiary(diary.id),
-                          onFavorite: () => feedProvider.saveToFavorites(diary.id),
-                          onComment: () => _showComments(diary),
+                          onLike: () => _handleLike(feedProvider, diary.id),
+                          onFavorite: () => _handleFavorite(feedProvider, diary.id, isOwner),
+                          onComment: (diaryId, content) => _handleComment(
+                            feedProvider, 
+                            diaryId, 
+                            content
+                          ),
+                          onEdit: (diaryToEdit) => _handleEditDiary(
+                            context, 
+                            feedProvider, 
+                            diaryToEdit
+                          ),
+                          onDelete: (diaryId) => _handleDeleteDiary(
+                            context, 
+                            feedProvider, 
+                            diaryId
+                          ),
+                          isOwner: isOwner,
                         );
                       },
                     ),
@@ -323,6 +372,141 @@ class _FeedTabState extends State<FeedTab> {
     );
   }
 
+  // ============ EVENT HANDLERS ============
+
+  void _handleLike(FeedProvider feedProvider, int diaryId) async {
+    try {
+      await feedProvider.likeDiary(diaryId);
+    } catch (e) {
+      _showErrorSnackBar('Failed to like diary: $e');
+    }
+  }
+
+  void _handleFavorite(FeedProvider feedProvider, int diaryId, bool isOwner) async {
+    try {
+      // Check if already favorited
+      final diary = feedProvider.diaries.firstWhere((d) => d.id == diaryId);
+      final isCurrentlyFavorited = diary.favoritedUserIds.contains(_currentUserId);
+
+      if (isCurrentlyFavorited) {
+        await feedProvider.removeFromFavorites(diaryId);
+        _showSuccessSnackBar('Removed from favorites');
+      } else {
+        await feedProvider.saveToFavorites(diaryId);
+        _showSuccessSnackBar('Added to favorites');
+      }
+    } catch (e) {
+      _showErrorSnackBar('Failed to update favorites: $e');
+    }
+  }
+
+  void _handleComment(
+    FeedProvider feedProvider, 
+    int diaryId, 
+    String content
+  ) async {
+    try {
+      await feedProvider.createComment(
+        diaryId: diaryId,
+        content: content,
+      );
+      _showSuccessSnackBar('Comment posted!');
+    } catch (e) {
+      _showErrorSnackBar('Failed to post comment: $e');
+    }
+  }
+
+  void _handleEditDiary(
+    BuildContext context,
+    FeedProvider feedProvider,
+    DiaryModel diary
+  ) async {
+    final result = await _showEditDialog(context, diary);
+    
+    if (result != null && result.isNotEmpty) {
+      try {
+        await feedProvider.updateDiary(
+          diaryId: diary.id,
+          content: result,
+          title: diary.title,
+          shareType: diary.shareType,
+        );
+        
+        _showSuccessSnackBar('Diary updated successfully!');
+      } catch (e) {
+        _showErrorSnackBar('Failed to update diary: $e');
+      }
+    }
+  }
+
+  Future<String?> _showEditDialog(BuildContext context, DiaryModel diary) async {
+    final controller = TextEditingController(text: diary.content);
+    
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Diary'),
+        content: TextField(
+          controller: controller,
+          maxLines: 5,
+          decoration: const InputDecoration(
+            hintText: 'Edit your diary content...',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleDeleteDiary(
+    BuildContext context,
+    FeedProvider feedProvider,
+    int diaryId
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Diary'),
+        content: const Text(
+          'Are you sure you want to delete this diary? '
+          'This action cannot be undone.'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await feedProvider.deleteDiary(diaryId);
+        _showSuccessSnackBar('Diary deleted successfully');
+      } catch (e) {
+        _showErrorSnackBar('Failed to delete diary: $e');
+      }
+    }
+  }
+
   void _navigateToCreateDiary(FeedProvider feedProvider) {
     final feedApiService = Provider.of<FeedApiService>(context, listen: false);
     
@@ -336,13 +520,7 @@ class _FeedTabState extends State<FeedTab> {
             feedProvider.diaries.insert(0, diary);
             
             // Show success message
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Created: "${diary.title}"'),
-                backgroundColor: Colors.green,
-                duration: const Duration(seconds: 2),
-              ),
-            );
+            _showSuccessSnackBar('Created: "${diary.title}"');
             
             // Scroll to top to show new diary
             if (_scrollController.hasClients) {
@@ -358,130 +536,27 @@ class _FeedTabState extends State<FeedTab> {
     );
   }
 
-  void _showComments(DiaryModel diary) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.7,
-          maxChildSize: 0.9,
-          minChildSize: 0.5,
-          builder: (context, scrollController) {
-            return Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Comments (${diary.comments.length})',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: diary.comments.isEmpty
-                      ? const Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.comment, size: 64, color: Colors.grey),
-                              SizedBox(height: 16),
-                              Text(
-                                'No comments yet',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                              Text(
-                                'Be the first to comment!',
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                        )
-                      : ListView.builder(
-                          controller: scrollController,
-                          itemCount: diary.comments.length,
-                          itemBuilder: (context, index) {
-                            final comment = diary.comments[index];
-                            return ListTile(
-                              leading: CircleAvatar(
-                                backgroundImage: comment.user.avatarUrl != null
-                                    ? NetworkImage(comment.user.avatarUrl!)
-                                    : null,
-                                child: comment.user.avatarUrl == null
-                                    ? Text(comment.user.username[0])
-                                    : null,
-                              ),
-                              title: Text(comment.user.username),
-                              subtitle: Text(comment.content),
-                              trailing: Text(
-                                _formatDate(comment.createdAt),
-                                style: const TextStyle(fontSize: 12, color: Colors.grey),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    border: Border(top: BorderSide(color: Colors.grey.shade300)),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          decoration: const InputDecoration(
-                            hintText: 'Add a comment...',
-                            border: InputBorder.none,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.send),
-                        onPressed: () {},
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
+  void _showSuccessSnackBar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-    
-    if (difference.inDays > 365) {
-      return '${difference.inDays ~/ 365}y ago';
-    } else if (difference.inDays > 30) {
-      return '${difference.inDays ~/ 30}mo ago';
-    } else if (difference.inDays > 0) {
-      return '${difference.inDays}d ago';
-    } else if (difference.inHours > 0) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes}m ago';
-    } else {
-      return 'Just now';
+  void _showErrorSnackBar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
   }
 }
@@ -611,7 +686,7 @@ class ProfileTab extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
+                    children: const [
                       _StatItem(value: '24', label: 'Posts'),
                       _StatItem(value: '128', label: 'Friends'),
                       _StatItem(value: '15', label: 'Notes'),

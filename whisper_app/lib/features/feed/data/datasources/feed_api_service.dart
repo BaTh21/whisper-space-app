@@ -315,4 +315,169 @@ Future<String> uploadMedia(File file, {bool isVideo = false}) async {
     rethrow;
   }
 }
+
+// ============ COMMENT FUNCTIONALITY ============
+Future<Comment> createComment({
+  required int diaryId,
+  required String content,
+  int? parentId,
+  List<String>? images,
+}) async {
+  _log('createComment() - diaryId: $diaryId, content: ${content.length} chars');
+  
+  try {
+    final token = storageService.getToken();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    final request = {
+      'content': content,
+      if (parentId != null) 'parent_id': parentId,
+      if (images != null && images.isNotEmpty) 'images': images,
+    };
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/diaries/$diaryId/comments'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(request),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return Comment.fromJson(data);
+    } else {
+      throw Exception('Failed to create comment: ${response.statusCode}');
+    }
+  } catch (e) {
+    _log('❌ Error creating comment: $e');
+    rethrow;
+  }
+}
+
+Future<List<Comment>> getComments(int diaryId) async {
+  try {
+    final token = storageService.getToken();
+    if (token == null) return [];
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/v1/diaries/$diaryId/comments'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      return data.map<Comment>((json) => Comment.fromJson(json)).toList();
+    }
+    return [];
+  } catch (e) {
+    _log('Error getting comments: $e');
+    return [];
+  }
+}
+
+Future<void> updateComment({
+  required int commentId,
+  required String content,
+  List<String>? images,
+}) async {
+  try {
+    final token = storageService.getToken();
+    if (token == null) return;
+
+    await http.put(
+      Uri.parse('$baseUrl/api/v1/diaries/comments/$commentId'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'content': content,
+        if (images != null) 'images': images,
+      }),
+    );
+  } catch (e) {
+    _log('Error updating comment: $e');
+    rethrow;
+  }
+}
+
+Future<void> deleteComment(int commentId) async {
+  try {
+    final token = storageService.getToken();
+    if (token == null) return;
+
+    await http.delete(
+      Uri.parse('$baseUrl/api/v1/diaries/comments/$commentId'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+  } catch (e) {
+    _log('Error deleting comment: $e');
+    rethrow;
+  }
+}
+
+// ============ DIARY UPDATE & DELETE ============
+Future<DiaryModel> updateDiary({
+  required int diaryId,
+  String? title,
+  String? content,
+  String? shareType,
+  List<int>? groupIds,
+  List<String>? imageUrls,
+  List<String>? videoUrls,
+}) async {
+  try {
+    final token = storageService.getToken();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    final request = {
+      if (title != null) 'title': title,
+      if (content != null) 'content': content,
+      if (shareType != null) 'share_type': shareType,
+      if (groupIds != null) 'group_ids': groupIds,
+      if (imageUrls != null) 'images': imageUrls,
+      if (videoUrls != null) 'videos': videoUrls,
+    };
+
+    final response = await http.patch(
+      Uri.parse('$baseUrl/api/v1/diaries/$diaryId'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(request),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return DiaryModel.fromJson(data);
+    } else {
+      throw Exception('Failed to update diary: ${response.statusCode}');
+    }
+  } catch (e) {
+    _log('❌ Error updating diary: $e');
+    rethrow;
+  }
+}
+
+Future<void> deleteDiary(int diaryId) async {
+  try {
+    final token = storageService.getToken();
+    if (token == null) return;
+
+    await http.delete(
+      Uri.parse('$baseUrl/api/v1/diaries/$diaryId'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+  } catch (e) {
+    _log('Error deleting diary: $e');
+    rethrow;
+  }
+}
 }

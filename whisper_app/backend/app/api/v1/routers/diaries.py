@@ -14,6 +14,8 @@ from app.models.diary_like import DiaryLike
 from app.models.group_member import GroupMember
 from app.models.diary_comment import DiaryComment
 from app.models.diary_favorite import DiaryFavorite
+from app.crud.activity import create_activity
+from app.models.activity import ActivityType
 
 router = APIRouter()
 
@@ -627,3 +629,148 @@ def remove_saved_diary_by_id(diary_id: int,
                             db: Session = Depends(get_db)
                              ):
     return remove_diary_from_favorites(db, current_user.id, diary_id)
+@router.post("/{diary_id}/comments", response_model=DiaryCommentOut)
+def create_diary_comment(
+    diary_id: int,
+    comment_in: DiaryCommentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Create a comment on a diary
+    """
+    try:
+        # Check if diary exists and is accessible
+        diary = db.query(Diary).filter(Diary.id == diary_id).first()
+        if not diary:
+            raise HTTPException(status_code=404, detail="Diary not found")
+        
+        if diary.is_deleted:
+            raise HTTPException(status_code=404, detail="Diary not found")
+        
+        # Check viewing permissions
+        if diary.user_id != current_user.id:
+            if not can_view(db, diary, current_user.id):
+                raise HTTPException(status_code=403, detail="No permission to comment")
+        
+        # Create comment
+        comment = DiaryComment(
+            diary_id=diary_id,
+            user_id=current_user.id,
+            content=comment_in.content,
+            parent_id=comment_in.parent_id,
+            images=comment_in.images or [],
+            created_at=datetime.utcnow()
+        )
+        
+        db.add(comment)
+        db.commit()
+        db.refresh(comment)
+        
+        # Load user relationship
+        comment = db.query(DiaryComment).options(
+            joinedload(DiaryComment.user)
+        ).filter(DiaryComment.id == comment.id).first()
+        
+        # Create activity notification
+        if diary.user_id != current_user.id:
+            create_activity(
+                db,
+                actor_id=current_user.id,
+                recipient_id=diary.user_id,
+                activity_type=ActivityType.post_comment,
+                post_id=diary_id,
+                extra_data=f"{current_user.username} commented on your diary"
+            )
+        
+        return DiaryCommentOut(
+            id=comment.id,
+            diary_id=comment.diary_id,
+            user=CreatorResponse(
+                id=comment.user.id,
+                username=comment.user.username,
+                avatar_url=comment.user.avatar_url
+            ),
+            content=comment.content,
+            images=comment.images or [],
+            parent_id=comment.parent_id,
+            replies=[],
+            created_at=comment.created_at
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create comment: {str(e)}"
+        )
+
+@router.get("/{diary_id}/comments", response_model=List[DiaryCommentOut])
+def get_diary_comments_full(
+    diary_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get all comments for a diary with nested replies
+    """
+    # Check diary access
+    diary = db.query(Diary).filter(Diary.id == diary_id).first()
+    if not diary:
+        raise HTTPException(status_code=404, detail="Diary not found")
+    
+    if diary.user_id != current_user.id:
+        if not can_view(db, diary, current_user.id):
+            raise HTTPException(status_code=403, detail="No permission to view comments")
+    
+    # Get all comments
+    comments = (
+        db.query(DiaryComment)
+        .options(joinedload(DiaryComment.user))
+        .filter(DiaryComment.diary_id == diary_id)
+        .order_by(DiaryComment.created_at.asc())
+        .all()
+    )
+    
+    # Build nested structure
+    comment_map = {}
+    root_comments = []
+    
+    # First pass: create nodes
+    for comment in comments:
+        comment_map[comment.id] = {
+            'comment': comment,
+            'children': []
+        }
+    
+    # Second pass: build tree
+    for comment in comments:
+        node = comment_map[comment.id]
+        if comment.parent_id is None:
+            root_comments.append(node)
+        else:
+            parent_node = comment_map.get(comment.parent_id)
+            if parent_node:
+                parent_node['children'].append(node)
+    
+    # Convert to response
+    def build_nested(node):
+        comment = node['comment']
+        return DiaryCommentOut(
+            id=comment.id,
+            diary_id=comment.diary_id,
+            user=CreatorResponse(
+                id=comment.user.id,
+                username=comment.user.username,
+                avatar_url=comment.user.avatar_url
+            ),
+            content=comment.content,
+            images=comment.images or [],
+            parent_id=comment.parent_id,
+            replies=[build_nested(child) for child in node['children']],
+            created_at=comment.created_at
+        )
+    
+    return [build_nested(node) for node in root_comments]
