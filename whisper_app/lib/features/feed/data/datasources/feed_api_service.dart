@@ -489,15 +489,33 @@ Future<DiaryModel> updateDiary({
 
 Future<void> deleteDiary(int diaryId) async {
   try {
-    final token = storageService.getToken();
-    if (token == null) return;
-
-    await http.delete(
+    final token = await storageService.getToken();
+    if (token == null) {
+      throw Exception('Not authenticated. Please login again.');
+    }
+    
+    final response = await http.delete(
       Uri.parse('$baseUrl/api/v1/diaries/$diaryId'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    ).timeout(const Duration(seconds: 30));
+    
+    // Handle 200 OK success response (changed from 204)
+    if (response.statusCode == 200) {
+      print('✅ Diary $diaryId deleted successfully');
+      return;
+    } else if (response.statusCode == 401) {
+      throw Exception('Session expired. Please login again.');
+    } else if (response.statusCode == 403) {
+      throw Exception('You do not have permission to delete this diary');
+    } else if (response.statusCode == 404) {
+      throw Exception('Diary not found');
+    } else {
+      throw Exception('Failed to delete diary: ${response.statusCode}');
+    }
   } catch (e) {
-    _log('Error deleting diary: $e');
     rethrow;
   }
 }
@@ -539,4 +557,6 @@ Future<void> deleteDiary(int diaryId) async {
     return [];
   }
 }
+
+
 }

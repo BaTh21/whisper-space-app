@@ -11,6 +11,7 @@ class ActivityType(enum.Enum):
     post_like = "post_like"
     post_comment = "post_comment"
     group_invite = "group_invite"
+    delete_post = "delete_post"
 
 class Activity(Base):
     __tablename__ = "activities"

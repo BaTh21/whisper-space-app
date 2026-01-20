@@ -3,17 +3,23 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:whisper_space_flutter/features/auth/data/models/diary_model.dart';
+import 'package:whisper_space_flutter/features/feed/data/datasources/feed_api_service.dart';
 
 class EditDiaryFullScreen extends StatefulWidget {
   final DiaryModel diary;
   final Function(DiaryModel) onUpdate;
   final List<Group> availableGroups;
+  
+  final FeedApiService? feedApiService;
+  final Function(int)? onDelete;
 
   const EditDiaryFullScreen({
     super.key,
     required this.diary,
     required this.onUpdate,
     this.availableGroups = const [],
+    this.feedApiService,
+    this.onDelete,
   });
 
   @override
@@ -28,13 +34,14 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
   
   List<String> _currentImages = [];
   List<String> _currentVideos = [];
-  List<File> _newImages = [];
-  List<File> _newVideos = [];
+  final List<File> _newImages = [];
+  final List<File> _newVideos = [];
   
   List<int> _selectedGroupIds = [];
   final ImagePicker _picker = ImagePicker();
   
   List<Group> _availableGroups = [];
+  bool _isDeleting = false;
 
   @override
   void initState() {
@@ -48,6 +55,64 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
     _availableGroups = widget.availableGroups;
   }
 
+  Future<void> _deleteDiary() async {
+    if (_isDeleting || widget.feedApiService == null || widget.onDelete == null) {
+      return;
+    }
+    
+    final context = this.context;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Diary'),
+        content: const Text('Are you sure you want to delete this diary? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context); // Close confirmation dialog
+              
+              if (mounted) {
+                setState(() => _isDeleting = true);
+              }
+              
+              try {
+                await widget.feedApiService!.deleteDiary(widget.diary.id);
+                
+                if (mounted) {
+                  // ✅ CRITICAL FIX: Call onDelete FIRST, then close the screen
+                  widget.onDelete!(widget.diary.id);
+                  
+                  // Show success message
+                  _showSnackBar('Diary deleted successfully!', false);
+                  
+                  // Wait a moment for the snackbar to show, then close
+                  await Future.delayed(const Duration(milliseconds: 1500));
+                  
+                  // Close the edit screen and return null to indicate deletion
+                  Navigator.pop(context, null);
+                }
+              } catch (e) {
+                if (mounted) {
+                  setState(() => _isDeleting = false);
+                  _showSnackBar('Failed to delete diary: $e', true);
+                }
+              }
+            },
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -55,7 +120,7 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
         title: const Text('Edit Diary'),
         leading: IconButton(
           icon: const Icon(Icons.close),
-          onPressed: _isLoading ? null : () {
+          onPressed: (_isLoading || _isDeleting) ? null : () {
             if (_titleController.text != widget.diary.title || 
                 _contentController.text != widget.diary.content ||
                 _newImages.isNotEmpty ||
@@ -88,6 +153,14 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
             }
           },
         ),
+        actions: [
+          if (widget.feedApiService != null && widget.onDelete != null)
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              onPressed: (_isLoading || _isDeleting) ? null : _deleteDiary,
+              tooltip: 'Delete Diary',
+            ),
+        ],
       ),
       body: Stack(
         children: [
@@ -96,7 +169,6 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Title - STYLING UPDATED
                 TextFormField(
                   controller: _titleController,
                   decoration: const InputDecoration(
@@ -111,7 +183,6 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                 
                 const SizedBox(height: 16),
                 
-                // Content - STYLING UPDATED
                 TextFormField(
                   controller: _contentController,
                   decoration: const InputDecoration(
@@ -128,7 +199,6 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                 
                 const SizedBox(height: 16),
                 
-                // Privacy Settings - STYLING UPDATED
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -145,60 +215,36 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                       ),
                       child: Column(
                         children: [
-                          RadioListTile<String>(
-                            title: const Row(
-                              children: [
-                                Icon(Icons.lock, size: 20, color: Colors.red),
-                                SizedBox(width: 8),
-                                Text('Private'),
-                              ],
-                            ),
-                            subtitle: const Text('Only you can see this'),
+                          _buildPrivacyOption(
+                            icon: Icons.lock,
+                            iconColor: Colors.red,
+                            title: 'Private',
+                            subtitle: 'Only you can see this',
                             value: 'personal',
-                            groupValue: _shareType,
-                            onChanged: _isLoading ? null : (value) => setState(() => _shareType = value!),
                           ),
                           Divider(height: 1, color: Colors.grey.shade300),
-                          RadioListTile<String>(
-                            title: const Row(
-                              children: [
-                                Icon(Icons.public, size: 20, color: Colors.green),
-                                SizedBox(width: 8),
-                                Text('Public'),
-                              ],
-                            ),
-                            subtitle: const Text('Everyone can see this'),
+                          _buildPrivacyOption(
+                            icon: Icons.public,
+                            iconColor: Colors.green,
+                            title: 'Public',
+                            subtitle: 'Everyone can see this',
                             value: 'public',
-                            groupValue: _shareType,
-                            onChanged: _isLoading ? null : (value) => setState(() => _shareType = value!),
                           ),
                           Divider(height: 1, color: Colors.grey.shade300),
-                          RadioListTile<String>(
-                            title: const Row(
-                              children: [
-                                Icon(Icons.people, size: 20, color: Colors.blue),
-                                SizedBox(width: 8),
-                                Text('Friends Only'),
-                              ],
-                            ),
-                            subtitle: const Text('Only your friends can see this'),
+                          _buildPrivacyOption(
+                            icon: Icons.people,
+                            iconColor: Colors.blue,
+                            title: 'Friends Only',
+                            subtitle: 'Only your friends can see this',
                             value: 'friends',
-                            groupValue: _shareType,
-                            onChanged: _isLoading ? null : (value) => setState(() => _shareType = value!),
                           ),
                           Divider(height: 1, color: Colors.grey.shade300),
-                          RadioListTile<String>(
-                            title: const Row(
-                              children: [
-                                Icon(Icons.group, size: 20, color: Colors.purple),
-                                SizedBox(width: 8),
-                                Text('Selected Groups'),
-                              ],
-                            ),
-                            subtitle: const Text('Only selected groups can see this'),
+                          _buildPrivacyOption(
+                            icon: Icons.group,
+                            iconColor: Colors.purple,
+                            title: 'Selected Groups',
+                            subtitle: 'Only selected groups can see this',
                             value: 'group',
-                            groupValue: _shareType,
-                            onChanged: _isLoading ? null : (value) => setState(() => _shareType = value!),
                           ),
                         ],
                       ),
@@ -208,7 +254,6 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                 
                 const SizedBox(height: 16),
                 
-                // Group Selection - STYLING UPDATED
                 if (_availableGroups.isNotEmpty && _shareType == 'group')
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -226,7 +271,7 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                           return FilterChip(
                             label: Text(group.name),
                             selected: isSelected,
-                            onSelected: (selected) {
+                            onSelected: (_isLoading || _isDeleting) ? null : (selected) {
                               setState(() {
                                 if (selected) {
                                   _selectedGroupIds.add(group.id);
@@ -269,7 +314,6 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                 
                 const SizedBox(height: 16),
                 
-                // Current Media Section - STYLING UPDATED
                 if (_currentImages.isNotEmpty || _currentVideos.isNotEmpty)
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -322,7 +366,6 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                 
                 const SizedBox(height: 16),
                 
-                // Add New Media Section - STYLING UPDATED
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -335,7 +378,7 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                       children: [
                         Expanded(
                           child: ElevatedButton.icon(
-                            onPressed: () => _pickImages(),
+                            onPressed: (_isLoading || _isDeleting) ? null : _pickImages,
                             icon: const Icon(Icons.photo_library),
                             label: const Text('Add Photos'),
                             style: ElevatedButton.styleFrom(
@@ -346,7 +389,7 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: ElevatedButton.icon(
-                            onPressed: () => _pickVideos(),
+                            onPressed: (_isLoading || _isDeleting) ? null : _pickVideos,
                             icon: const Icon(Icons.video_library),
                             label: const Text('Add Video'),
                             style: ElevatedButton.styleFrom(
@@ -365,7 +408,6 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                       ),
                     ),
                     
-                    // New Images Preview - STYLING UPDATED
                     if (_newImages.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       Row(
@@ -391,7 +433,6 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                       ),
                     ],
                     
-                    // New Videos Preview - STYLING UPDATED
                     if (_newVideos.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       Row(
@@ -421,12 +462,11 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                 
                 const SizedBox(height: 32),
                 
-                // Save Button - STYLING UPDATED
                 SizedBox(
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: _isLoading ? null : _saveChanges,
+                    onPressed: (_isLoading || _isDeleting) ? null : _saveChanges,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Theme.of(context).primaryColor,
                       foregroundColor: Colors.white,
@@ -436,22 +476,39 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                         : const Text('Update Diary', style: TextStyle(fontSize: 16)),
                   ),
                 ),
+                
+                if (widget.feedApiService != null && widget.onDelete != null) ...[
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: (_isLoading || _isDeleting) ? null : _deleteDiary,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: _isDeleting
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text('Delete Diary', style: TextStyle(fontSize: 16)),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
           
-          // Loading overlay - STYLING UPDATED
-          if (_isLoading)
+          if (_isLoading || _isDeleting)
             Container(
               color: Colors.black54,
-              child: Center(
+              child: const Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const CircularProgressIndicator(color: Colors.white),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Updating diary...',
+                    CircularProgressIndicator(color: Colors.white),
+                    SizedBox(height: 16),
+                    Text(
+                      'Processing...',
                       style: TextStyle(color: Colors.white, fontSize: 16),
                     ),
                   ],
@@ -463,7 +520,69 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
     );
   }
 
-  // Current Media Item - STYLING UPDATED
+  Widget _buildPrivacyOption({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required String value,
+  }) {
+    return InkWell(
+      onTap: (_isLoading || _isDeleting)
+          ? null
+          : () {
+              setState(() => _shareType = value);
+            },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: iconColor),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const Spacer(),
+                      Radio<String>(
+                        value: value,
+                        groupValue: _shareType,
+                        onChanged: (_isLoading || _isDeleting)
+                            ? null
+                            : (newValue) {
+                                if (newValue != null) {
+                                  setState(() => _shareType = newValue);
+                                }
+                              },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildCurrentMediaItem(String url, bool isVideo, int index) {
     return Stack(
       children: [
@@ -507,7 +626,7 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
           top: 0,
           right: 0,
           child: GestureDetector(
-            onTap: () => _removeMedia(url, isVideo),
+            onTap: (_isLoading || _isDeleting) ? null : () => _removeMedia(url, isVideo),
             child: Container(
               padding: const EdgeInsets.all(2),
               decoration: const BoxDecoration(
@@ -526,7 +645,6 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
     );
   }
 
-  // New Media Item - STYLING UPDATED
   Widget _buildNewMediaItem(File file, bool isVideo, int index) {
     return Stack(
       children: [
@@ -539,16 +657,14 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
             color: isVideo ? Colors.green.shade50 : Colors.blue.shade50,
           ),
           child: isVideo
-              ? Container(
-                  child: const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.videocam, size: 24, color: Colors.green),
-                        SizedBox(height: 4),
-                        Text('Video', style: TextStyle(fontSize: 10)),
-                      ],
-                    ),
+              ? const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.videocam, size: 24, color: Colors.green),
+                      SizedBox(height: 4),
+                      Text('Video', style: TextStyle(fontSize: 10)),
+                    ],
                   ),
                 )
               : Image.file(
@@ -570,7 +686,7 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
           top: 0,
           right: 0,
           child: GestureDetector(
-            onTap: () => _removeNewMedia(file, isVideo),
+            onTap: (_isLoading || _isDeleting) ? null : () => _removeNewMedia(file, isVideo),
             child: Container(
               padding: const EdgeInsets.all(2),
               decoration: const BoxDecoration(
@@ -589,7 +705,6 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
     );
   }
 
-  // KEEP ALL EXISTING METHODS UNCHANGED
   Future<void> _pickImages() async {
     try {
       final pickedFiles = await _picker.pickMultiImage(
@@ -597,7 +712,7 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
         maxHeight: 1080,
         imageQuality: 85,
       );
-      if (pickedFiles.isNotEmpty) {
+      if (pickedFiles != null && pickedFiles.isNotEmpty) {
         setState(() {
           _newImages.addAll(pickedFiles.map((file) => File(file.path)));
         });
@@ -710,13 +825,15 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
 
       await widget.onUpdate(updatedDiary);
       
-      _showSnackBar('✅ Diary updated successfully!', false);
+      _showSnackBar('Diary updated successfully!', false);
       
       if (mounted) {
         Navigator.pop(context, updatedDiary);
       }
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
       _showSnackBar('Failed to save: $e', true);
     }
   }

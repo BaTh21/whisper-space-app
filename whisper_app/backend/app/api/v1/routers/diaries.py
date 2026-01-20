@@ -389,12 +389,33 @@ def update_diary_by_id(
             detail=str(e)
         )
 
-@router.delete("/{diary_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_diary_by_id(diary_id: int,
-                       db: Session = Depends(get_db),
-                       current_user: User = Depends(get_current_user)):
-    delete_diary(db, diary_id, current_user.id)
-    return None
+@router.delete("/{diary_id}", status_code=status.HTTP_200_OK)  # Change from 204 to 200
+def delete_diary_by_id(
+    diary_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a diary endpoint"""
+    
+    try:
+        result = delete_diary(db, diary_id, current_user.id)
+        
+        if result:
+            return result  # Return the success message
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to delete diary"
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {str(e)}"
+        )
 
 @router.post("/{diary_id}/comment", response_model=DiaryCommentOut)
 def comment_on_diary(

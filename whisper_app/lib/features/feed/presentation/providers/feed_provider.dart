@@ -13,6 +13,7 @@ class FeedProvider with ChangeNotifier {
   List<DiaryModel> _diaries = [];
   List<DiaryModel> _myDiaries = [];
   bool _isLoading = false;
+  bool _isDeleting = false;
   String? _error;
   bool _isWsConnected = false;
   bool _isWsConnecting = false;
@@ -709,20 +710,36 @@ class FeedProvider with ChangeNotifier {
     }
   }
 
-  // ============ DIARY DELETE FUNCTIONALITY ============
-  Future<void> deleteDiary(int diaryId) async {
-    try {
-      await feedApiService.deleteDiary(diaryId);
-      
-      _diaries.removeWhere((d) => d.id == diaryId);
-      _myDiaries.removeWhere((d) => d.id == diaryId);
-      
-      notifyListeners();
-      
-    } catch (e) {
-      rethrow;
-    }
+Future<void> deleteDiary(int diaryId) async {
+  // Prevent multiple simultaneous delete operations
+  if (_isDeleting) {
+    throw Exception('Delete operation already in progress');
   }
+  
+  try {
+    _isDeleting = true;
+    _isLoading = true;
+    notifyListeners();
+    
+    // Call API to delete from backend
+    await feedApiService.deleteDiary(diaryId);
+    
+    // Remove from local state
+    _diaries = _diaries.where((d) => d.id != diaryId).toList();
+    _myDiaries = _myDiaries.where((d) => d.id != diaryId).toList();
+    
+    _isLoading = false;
+    _isDeleting = false;
+    notifyListeners();
+    
+  } catch (e) {
+    _isLoading = false;
+    _isDeleting = false;
+    _error = 'Failed to delete diary: $e';
+    notifyListeners();
+    rethrow;
+  }
+}
 
   // ============ LIKE FUNCTIONALITY ============
   Future<void> likeDiary(int diaryId) async {

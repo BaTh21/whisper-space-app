@@ -386,41 +386,62 @@ def update_diary(db: Session, diary_id: int, diary_data: DiaryUpdate, current_us
     return diary
 
 def delete_diary(db: Session, diary_id: int, current_user_id: int):
-    diary = db.query(Diary).filter(Diary.id == diary_id, Diary.is_deleted == False).first()
+    """Delete a diary with proper cleanup"""
+    
+    diary = db.query(Diary).filter(
+        Diary.id == diary_id,
+        Diary.is_deleted == False
+    ).first()
+    
     if not diary:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                           detail="Diary not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Diary not found"
+        )
     
     if diary.user_id != current_user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                           detail="Only creator can delete this diary")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only creator can delete this diary"
+        )
     
-    # Clean up images from Cloudinary
-    if diary.images:
-        image_service_sync.cleanup_media(diary.images)
-    
-    # Clean up videos and thumbnails
-    if diary.videos:
-        image_service_sync.cleanup_media(diary.videos)
-    
-    if diary.video_thumbnails:
-        image_service_sync.cleanup_media(diary.video_thumbnails)
-    
-    # Also clean up comment images
-    comments = db.query(DiaryComment).filter(DiaryComment.diary_id == diary_id).all()
-    for comment in comments:
-        if comment.images:
-            image_service_sync.cleanup_media(comment.images)
-    
-    # HARD DELETE
-    db.delete(diary)
-    
-    db.query(DiaryComment).filter(DiaryComment.diary_id == diary_id).delete()
-    db.query(DiaryLike).filter(DiaryLike.diary_id == diary_id).delete()
-    db.query(DiaryGroup).filter(DiaryGroup.diary_id == diary_id).delete()
-    
-    db.commit()
-    return {"detail": "Diary has been permanently deleted"}
+    try:
+        if diary.images:
+            image_service_sync.cleanup_media(diary.images)
+
+        if diary.videos:
+            image_service_sync.cleanup_media(diary.videos)
+        
+        if diary.video_thumbnails:
+            image_service_sync.cleanup_media(diary.video_thumbnails)
+        
+
+        comments = db.query(DiaryComment).filter(DiaryComment.diary_id == diary_id).all()
+        for comment in comments:
+            if comment.images:
+                image_service_sync.cleanup_media(comment.images)
+        
+        db.query(DiaryFavorite).filter(DiaryFavorite.diary_id == diary_id).delete()
+
+        db.query(DiaryLike).filter(DiaryLike.diary_id == diary_id).delete()
+
+        db.query(DiaryComment).filter(DiaryComment.diary_id == diary_id).delete()
+        
+
+        db.query(DiaryGroup).filter(DiaryGroup.diary_id == diary_id).delete()
+        db.delete(diary)
+        db.commit()
+
+        # Return 200 OK with success message instead of 204 No Content
+        return {"detail": "Diary deleted successfully"}
+        
+    except Exception as e:
+        db.rollback()
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error deleting diary: {str(e)}"
+        )
 
 def share_diary(db: Session, diary_id: int, diary_data: DiaryShare, current_user_id: int):
     diary = db.query(Diary).filter(Diary.id == diary_id, Diary.is_deleted == False).first()
