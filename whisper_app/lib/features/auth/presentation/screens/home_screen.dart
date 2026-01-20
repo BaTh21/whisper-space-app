@@ -72,7 +72,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   onPressed: _showLogoutDialog,
                 ),
               ]
-            : _selectedIndex == 0 
+            : _selectedIndex == 0
                 ? [
                     // ADDED: Create button in app bar for Feed tab
                     IconButton(
@@ -86,7 +86,8 @@ class _HomeScreenState extends State<HomeScreen> {
       body: _screens[_selectedIndex],
       bottomNavigationBar: _buildBottomNavBar(),
       // ADDED: FloatingActionButton that's always visible on Feed tab
-      floatingActionButton: _selectedIndex == 0 ? _buildFloatingActionButton(context) : null,
+      floatingActionButton:
+          _selectedIndex == 0 ? _buildFloatingActionButton(context) : null,
     );
   }
 
@@ -101,7 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _createNewDiaryFromHome(BuildContext context) {
     final feedProvider = Provider.of<FeedProvider>(context, listen: false);
     final feedApiService = Provider.of<FeedApiService>(context, listen: false);
-    
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -110,7 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
           onDiaryCreated: (DiaryModel diary) {
             // Add to provider
             feedProvider.diaries.insert(0, diary);
-            
+
             // Show success message
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -165,27 +166,29 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _showLogoutDialog() async {
     final shouldLogout = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Logout'),
+            content: const Text('Are you sure you want to logout?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child:
+                    const Text('Logout', style: TextStyle(color: Colors.red)),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Logout', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    ) ?? false;
+        ) ??
+        false;
 
     if (shouldLogout && mounted) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       await authProvider.logout();
-      
+
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -211,6 +214,7 @@ class _FeedTabState extends State<FeedTab> {
   bool _isInitialized = false;
   bool _showCreateButton = true;
   int? _currentUserId;
+  List<Group> _availableGroups = []; // ADDED: Define availableGroups here
 
   @override
   void initState() {
@@ -218,6 +222,7 @@ class _FeedTabState extends State<FeedTab> {
     _initialize();
     _scrollController.addListener(_onScroll);
     _loadCurrentUser();
+    _loadUserGroups(); // ADDED: Load groups on init
   }
 
   void _loadCurrentUser() {
@@ -232,16 +237,33 @@ class _FeedTabState extends State<FeedTab> {
     });
   }
 
+  Future<void> _loadUserGroups() async {
+    try {
+      final feedApiService =
+          Provider.of<FeedApiService>(context, listen: false);
+      final groups = await feedApiService.getUserGroups();
+      if (mounted) {
+        setState(() {
+          _availableGroups = groups;
+        });
+      }
+    } catch (e) {
+      print('Failed to load groups: $e');
+    }
+  }
+
   Future<void> _initialize() async {
     await Future.delayed(const Duration(milliseconds: 100));
     final feedProvider = Provider.of<FeedProvider>(context, listen: false);
     await feedProvider.loadInitialFeed();
-    setState(() => _isInitialized = true);
+    if (mounted) {
+      setState(() => _isInitialized = true);
+    }
   }
 
   void _onScroll() {
     final currentScroll = _scrollController.position.pixels;
-    
+
     // Show/hide create button based on scroll position
     if (currentScroll > 100 && _showCreateButton) {
       setState(() => _showCreateButton = false);
@@ -260,7 +282,8 @@ class _FeedTabState extends State<FeedTab> {
   Widget build(BuildContext context) {
     return Consumer<FeedProvider>(
       builder: (context, feedProvider, child) {
-        if (!_isInitialized || feedProvider.isLoading && feedProvider.diaries.isEmpty) {
+        if (!_isInitialized ||
+            feedProvider.isLoading && feedProvider.diaries.isEmpty) {
           return const Center(child: CircularProgressIndicator());
         }
 
@@ -311,7 +334,8 @@ class _FeedTabState extends State<FeedTab> {
                           ),
                           const SizedBox(height: 20),
                           ElevatedButton(
-                            onPressed: () => _navigateToCreateDiary(feedProvider),
+                            onPressed: () =>
+                                _navigateToCreateDiary(feedProvider),
                             child: const Text('Create First Diary'),
                           ),
                         ],
@@ -324,32 +348,24 @@ class _FeedTabState extends State<FeedTab> {
                       itemBuilder: (context, index) {
                         final diary = feedProvider.diaries[index];
                         final isOwner = diary.author.id == _currentUserId;
-                        
+
                         return DiaryCard(
                           diary: diary,
                           onLike: () => _handleLike(feedProvider, diary.id),
-                          onFavorite: () => _handleFavorite(feedProvider, diary.id, isOwner),
-                          onComment: (diaryId, content) => _handleComment(
-                            feedProvider, 
-                            diaryId, 
-                            content
-                          ),
+                          onFavorite: () =>
+                              _handleFavorite(feedProvider, diary.id, isOwner),
+                          onComment: (diaryId, content) =>
+                              _handleComment(feedProvider, diaryId, content),
                           onEdit: (diaryToEdit) => _handleEditDiary(
-                            context, 
-                            feedProvider, 
-                            diaryToEdit
-                          ),
+                              context, feedProvider, diaryToEdit),
                           onDelete: (diaryId) => _handleDeleteDiary(
-                            context, 
-                            feedProvider, 
-                            diaryId
-                          ),
+                              context, feedProvider, diaryId),
                           isOwner: isOwner,
                         );
                       },
                     ),
             ),
-            
+
             // ADDED: Fixed Create Button at bottom (always visible in FeedTab)
             if (_showCreateButton && feedProvider.diaries.isNotEmpty)
               Positioned(
@@ -364,7 +380,8 @@ class _FeedTabState extends State<FeedTab> {
     );
   }
 
-  Widget _buildBottomCreateButton(BuildContext context, FeedProvider feedProvider) {
+  Widget _buildBottomCreateButton(
+      BuildContext context, FeedProvider feedProvider) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -383,11 +400,13 @@ class _FeedTabState extends State<FeedTab> {
     }
   }
 
-  void _handleFavorite(FeedProvider feedProvider, int diaryId, bool isOwner) async {
+  void _handleFavorite(
+      FeedProvider feedProvider, int diaryId, bool isOwner) async {
     try {
       // Check if already favorited
       final diary = feedProvider.diaries.firstWhere((d) => d.id == diaryId);
-      final isCurrentlyFavorited = diary.favoritedUserIds.contains(_currentUserId);
+      final isCurrentlyFavorited =
+          diary.favoritedUserIds.contains(_currentUserId);
 
       if (isCurrentlyFavorited) {
         await feedProvider.removeFromFavorites(diaryId);
@@ -402,10 +421,7 @@ class _FeedTabState extends State<FeedTab> {
   }
 
   void _handleComment(
-    FeedProvider feedProvider, 
-    int diaryId, 
-    String content
-  ) async {
+      FeedProvider feedProvider, int diaryId, String content) async {
     try {
       await feedProvider.createComment(
         diaryId: diaryId,
@@ -417,46 +433,45 @@ class _FeedTabState extends State<FeedTab> {
     }
   }
 
-void _handleEditDiary(
-  BuildContext context,
-  FeedProvider feedProvider,
-  DiaryModel diary
-) async {
-  final feedApiService = Provider.of<FeedApiService>(context, listen: false);
-  
-  final updatedDiary = await Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => EditDiaryFullScreen(
-        diary: diary,
-        onUpdate: (updatedDiary) async {
-          try {
-            // Update the diary with all fields
-            final result = await feedProvider.updateDiary(
-              diaryId: updatedDiary.id,
-              title: updatedDiary.title,
-              content: updatedDiary.content,
-              shareType: updatedDiary.shareType,
-              // Note: For media updates, you'll need additional API calls
-            );
-            
-            return result;
-          } catch (e) {
-            throw e;
-          }
-        },
-      ),
-    ),
-  );
-  
-  if (updatedDiary != null) {
-    _showSuccessSnackBar('Diary updated successfully!');
-  }
-}
+  void _handleEditDiary(
+      BuildContext context, FeedProvider provider, DiaryModel diary) async {
+    final result = await Navigator.push<DiaryModel?>(
+      context,
+      MaterialPageRoute<DiaryModel?>(
+        builder: (context) => EditDiaryFullScreen(
+          diary: diary,
+          onUpdate: (updatedDiary) async {
+            try {
+              // Update the diary with all fields
+              final result = await provider.updateDiary(
+                diaryId: updatedDiary.id,
+                title: updatedDiary.title,
+                content: updatedDiary.content,
+                shareType: updatedDiary.shareType,
+                groupIds: updatedDiary.groups.map((g) => g.id).toList(),
+                imageUrls: updatedDiary.images,
+                videoUrls: updatedDiary.videos,
+              );
 
-  Future<String?> _showEditDialog(BuildContext context, DiaryModel diary) async {
+              return result;
+            } catch (e) {
+              rethrow;
+            }
+          },
+          availableGroups: _availableGroups,
+        ),
+      ),
+    );
+
+    if (result != null && mounted) {
+      _showSuccessSnackBar('Diary updated successfully!');
+    }
+  }
+
+  Future<String?> _showEditDialog(
+      BuildContext context, DiaryModel diary) async {
     final controller = TextEditingController(text: diary.content);
-    
+
     return showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -484,18 +499,13 @@ void _handleEditDiary(
   }
 
   void _handleDeleteDiary(
-    BuildContext context,
-    FeedProvider feedProvider,
-    int diaryId
-  ) async {
+      BuildContext context, FeedProvider feedProvider, int diaryId) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Diary'),
-        content: const Text(
-          'Are you sure you want to delete this diary? '
-          'This action cannot be undone.'
-        ),
+        content: const Text('Are you sure you want to delete this diary? '
+            'This action cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -524,7 +534,7 @@ void _handleEditDiary(
 
   void _navigateToCreateDiary(FeedProvider feedProvider) {
     final feedApiService = Provider.of<FeedApiService>(context, listen: false);
-    
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -533,10 +543,10 @@ void _handleEditDiary(
           onDiaryCreated: (DiaryModel diary) {
             // Add to provider
             feedProvider.diaries.insert(0, diary);
-            
+
             // Show success message
             _showSuccessSnackBar('Created: "${diary.title}"');
-            
+
             // Scroll to top to show new diary
             if (_scrollController.hasClients) {
               _scrollController.animateTo(
@@ -651,7 +661,7 @@ class ProfileTab extends StatelessWidget {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
         final user = authProvider.currentUser;
-        
+
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(

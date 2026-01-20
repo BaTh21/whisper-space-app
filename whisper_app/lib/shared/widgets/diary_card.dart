@@ -7,7 +7,8 @@ class DiaryCard extends StatefulWidget {
   final DiaryModel diary;
   final VoidCallback onLike;
   final VoidCallback onFavorite;
-  final Function(int, String) onComment; // Changed to accept diaryId and content
+  final Function(int, String)
+      onComment; // Changed to accept diaryId and content
   final Function(DiaryModel) onEdit;
   final Function(int) onDelete;
   final bool isOwner;
@@ -29,6 +30,7 @@ class DiaryCard extends StatefulWidget {
 
 class _DiaryCardState extends State<DiaryCard> {
   bool _showFullContent = false;
+  bool _isMenuDisabled = false;
   final TextEditingController _commentController = TextEditingController();
   bool _isCommenting = false;
   bool _showCommentMenu = false;
@@ -36,10 +38,10 @@ class _DiaryCardState extends State<DiaryCard> {
 
   @override
   Widget build(BuildContext context) {
-    final isLikedByCurrentUser = widget.diary.likes.any((like) => 
-        like.user.id == _getCurrentUserId());
-    final isFavoritedByCurrentUser = widget.diary.favoritedUserIds.contains(
-        _getCurrentUserId());
+    final isLikedByCurrentUser =
+        widget.diary.likes.any((like) => like.user.id == _getCurrentUserId());
+    final isFavoritedByCurrentUser =
+        widget.diary.favoritedUserIds.contains(_getCurrentUserId());
 
     return Card(
       elevation: 2,
@@ -59,7 +61,7 @@ class _DiaryCardState extends State<DiaryCard> {
             children: [
               // Header with Menu
               _buildHeader(),
-              
+
               const SizedBox(height: 16),
 
               // Title
@@ -77,11 +79,11 @@ class _DiaryCardState extends State<DiaryCard> {
                 ),
 
               // Content
-              if (widget.diary.content.isNotEmpty)
-                _buildContent(),
+              if (widget.diary.content.isNotEmpty) _buildContent(),
 
               // Media Gallery
-              if (widget.diary.images.isNotEmpty || widget.diary.videos.isNotEmpty)
+              if (widget.diary.images.isNotEmpty ||
+                  widget.diary.videos.isNotEmpty)
                 Column(
                   children: [
                     const SizedBox(height: 12),
@@ -107,8 +109,7 @@ class _DiaryCardState extends State<DiaryCard> {
               ),
 
               // Comments Preview
-              if (widget.diary.comments.isNotEmpty)
-                _buildCommentsPreview(),
+              if (widget.diary.comments.isNotEmpty) _buildCommentsPreview(),
 
               // Comment Input
               if (_isCommenting) _buildCommentInput(),
@@ -164,48 +165,55 @@ class _DiaryCardState extends State<DiaryCard> {
         ),
         PopupMenuButton<String>(
           icon: const Icon(Icons.more_vert, size: 20),
-          onSelected: (value) => _handleMenuSelection(value),
+          onSelected: (value) {
+            if (_isMenuDisabled) return; // Prevent multiple clicks
+            _handleMenuSelection(value);
+          },
           itemBuilder: (context) => [
-            if (widget.isOwner) PopupMenuItem(
-              value: 'edit',
-              child: Row(
-                children: [
-                  const Icon(Icons.edit, size: 20, color: Colors.blue),
-                  const SizedBox(width: 8),
-                  Text('Edit', style: TextStyle(color: Colors.blue[700])),
-                ],
+            if (widget.isOwner && !_isMenuDisabled)
+              PopupMenuItem(
+                value: 'edit',
+                child: Row(
+                  children: [
+                    const Icon(Icons.edit, size: 20, color: Colors.blue),
+                    const SizedBox(width: 8),
+                    Text('Edit', style: TextStyle(color: Colors.blue[700])),
+                  ],
+                ),
               ),
-            ),
-            if (widget.isOwner) PopupMenuItem(
-              value: 'delete',
-              child: Row(
-                children: [
-                  const Icon(Icons.delete, size: 20, color: Colors.red),
-                  const SizedBox(width: 8),
-                  const Text('Delete', style: TextStyle(color: Colors.red)),
-                ],
+            if (widget.isOwner && !_isMenuDisabled)
+              PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    const Icon(Icons.delete, size: 20, color: Colors.red),
+                    const SizedBox(width: 8),
+                    const Text('Delete', style: TextStyle(color: Colors.red)),
+                  ],
+                ),
               ),
-            ),
-            PopupMenuItem(
-              value: 'share',
-              child: Row(
-                children: [
-                  const Icon(Icons.share, size: 20, color: Colors.green),
-                  const SizedBox(width: 8),
-                  Text('Share', style: TextStyle(color: Colors.green[700])),
-                ],
+            if (!_isMenuDisabled)
+              PopupMenuItem(
+                value: 'share',
+                child: Row(
+                  children: [
+                    const Icon(Icons.share, size: 20, color: Colors.green),
+                    const SizedBox(width: 8),
+                    Text('Share', style: TextStyle(color: Colors.green[700])),
+                  ],
+                ),
               ),
-            ),
-            PopupMenuItem(
-              value: 'report',
-              child: Row(
-                children: [
-                  const Icon(Icons.report, size: 20, color: Colors.orange),
-                  const SizedBox(width: 8),
-                  Text('Report', style: TextStyle(color: Colors.orange[700])),
-                ],
+            if (!_isMenuDisabled)
+              PopupMenuItem(
+                value: 'report',
+                child: Row(
+                  children: [
+                    const Icon(Icons.report, size: 20, color: Colors.orange),
+                    const SizedBox(width: 8),
+                    Text('Report', style: TextStyle(color: Colors.orange[700])),
+                  ],
+                ),
               ),
-            ),
           ],
         ),
       ],
@@ -270,7 +278,7 @@ class _DiaryCardState extends State<DiaryCard> {
             activeColor: Colors.red,
           ),
         ),
-        
+
         // Comment Button
         Expanded(
           child: _buildActionButton(
@@ -289,11 +297,13 @@ class _DiaryCardState extends State<DiaryCard> {
             activeColor: Colors.blue,
           ),
         ),
-        
+
         // Save/Favorite Button
         Expanded(
           child: _buildActionButton(
-            icon: isFavoritedByCurrentUser ? Icons.bookmark : Icons.bookmark_border,
+            icon: isFavoritedByCurrentUser
+                ? Icons.bookmark
+                : Icons.bookmark_border,
             label: 'Save',
             count: 0,
             onPressed: widget.onFavorite,
@@ -301,7 +311,7 @@ class _DiaryCardState extends State<DiaryCard> {
             activeColor: Colors.amber,
           ),
         ),
-        
+
         // Share Button
         Expanded(
           child: _buildActionButton(
@@ -382,7 +392,7 @@ class _DiaryCardState extends State<DiaryCard> {
   }
 
   Widget _buildCommentsPreview() {
-    final previewComments = widget.diary.comments.length > 2 
+    final previewComments = widget.diary.comments.length > 2
         ? widget.diary.comments.take(2).toList()
         : widget.diary.comments;
 
@@ -406,7 +416,6 @@ class _DiaryCardState extends State<DiaryCard> {
                 ),
               ),
             ),
-          
           ...previewComments.map((comment) => _buildCommentItem(comment)),
         ],
       ),
@@ -415,7 +424,7 @@ class _DiaryCardState extends State<DiaryCard> {
 
   Widget _buildCommentItem(Comment comment) {
     final isCurrentUser = comment.user.id == _getCurrentUserId();
-    
+
     return GestureDetector(
       onLongPress: () {
         setState(() {
@@ -587,29 +596,7 @@ class _DiaryCardState extends State<DiaryCard> {
         widget.onEdit(widget.diary);
         break;
       case 'delete':
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Delete Diary'),
-            content: const Text('Are you sure you want to delete this diary? This action cannot be undone.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () {
-                  widget.onDelete(widget.diary.id);
-                  Navigator.pop(context);
-                },
-                child: const Text(
-                  'Delete',
-                  style: TextStyle(color: Colors.red),
-                ),
-              ),
-            ],
-          ),
-        );
+        _showDeleteConfirmation();
         break;
       case 'share':
         _shareDiary();
@@ -630,7 +617,8 @@ class _DiaryCardState extends State<DiaryCard> {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Thank you for your report. We will review it shortly.'),
+                      content: Text(
+                          'Thank you for your report. We will review it shortly.'),
                       backgroundColor: Colors.green,
                     ),
                   );
@@ -642,6 +630,52 @@ class _DiaryCardState extends State<DiaryCard> {
         );
         break;
     }
+  }
+
+  void _showDeleteConfirmation() {
+    bool isDeleting = false; // Add flag to prevent multiple clicks
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text('Delete Diary'),
+            content: const Text(
+                'Are you sure you want to delete this diary? This action cannot be undone.'),
+            actions: [
+              TextButton(
+                onPressed: isDeleting ? null : () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: isDeleting
+                    ? null
+                    : () async {
+                        setState(() => isDeleting = true);
+                        await Future.delayed(const Duration(milliseconds: 50));
+                        if (context.mounted) {
+                          Navigator.pop(context); // Close dialog
+                          widget.onDelete(widget.diary.id); // Trigger delete
+                        }
+                      },
+                child: isDeleting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text(
+                        'Delete',
+                        style: TextStyle(color: Colors.red),
+                      ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   void _shareDiary() {
@@ -828,12 +862,12 @@ class _DiaryCardState extends State<DiaryCard> {
     if (content.isEmpty) return;
 
     widget.onComment(widget.diary.id, content);
-    
+
     setState(() {
       _commentController.clear();
       _isCommenting = false;
     });
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Comment posted!'),
