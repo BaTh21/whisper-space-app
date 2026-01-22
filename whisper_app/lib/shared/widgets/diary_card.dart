@@ -7,10 +7,11 @@ class DiaryCard extends StatefulWidget {
   final DiaryModel diary;
   final VoidCallback onLike;
   final VoidCallback onFavorite;
-  final Function(int, String)
-      onComment; // Changed to accept diaryId and content
+  final Function(int, String) onComment;
   final Function(DiaryModel) onEdit;
   final Function(int) onDelete;
+  final Function(int, String, List<String>?)? onUpdateComment;
+  final Function(int)? onDeleteComment;
   final bool isOwner;
 
   const DiaryCard({
@@ -21,6 +22,8 @@ class DiaryCard extends StatefulWidget {
     required this.onComment,
     required this.onEdit,
     required this.onDelete,
+    this.onUpdateComment,
+    this.onDeleteComment,
     required this.isOwner,
   });
 
@@ -30,18 +33,14 @@ class DiaryCard extends StatefulWidget {
 
 class _DiaryCardState extends State<DiaryCard> {
   bool _showFullContent = false;
-  bool _isMenuDisabled = false;
   final TextEditingController _commentController = TextEditingController();
   bool _isCommenting = false;
-  bool _showCommentMenu = false;
-  int? _selectedCommentId;
+  bool _isSubmittingComment = false;
 
   @override
   Widget build(BuildContext context) {
-    final isLikedByCurrentUser =
-        widget.diary.likes.any((like) => like.user.id == _getCurrentUserId());
-    final isFavoritedByCurrentUser =
-        widget.diary.favoritedUserIds.contains(_getCurrentUserId());
+    final isLikedByCurrentUser = widget.diary.likes.any((like) => like.user.id == _getCurrentUserId());
+    final isFavoritedByCurrentUser = widget.diary.favoritedUserIds.contains(_getCurrentUserId());
 
     return Card(
       elevation: 2,
@@ -165,55 +164,50 @@ class _DiaryCardState extends State<DiaryCard> {
         ),
         PopupMenuButton<String>(
           icon: const Icon(Icons.more_vert, size: 20),
-          onSelected: (value) {
-            if (_isMenuDisabled) return; // Prevent multiple clicks
-            _handleMenuSelection(value);
-          },
+          onSelected: _handleMenuSelection,
           itemBuilder: (context) => [
-            if (widget.isOwner && !_isMenuDisabled)
-              PopupMenuItem(
+            if (widget.isOwner)
+              const PopupMenuItem(
                 value: 'edit',
                 child: Row(
                   children: [
-                    const Icon(Icons.edit, size: 20, color: Colors.blue),
-                    const SizedBox(width: 8),
-                    Text('Edit', style: TextStyle(color: Colors.blue[700])),
+                    Icon(Icons.edit, size: 20, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Text('Edit', style: TextStyle(color: Colors.blue)),
                   ],
                 ),
               ),
-            if (widget.isOwner && !_isMenuDisabled)
-              PopupMenuItem(
+            if (widget.isOwner)
+              const PopupMenuItem(
                 value: 'delete',
                 child: Row(
                   children: [
-                    const Icon(Icons.delete, size: 20, color: Colors.red),
-                    const SizedBox(width: 8),
-                    const Text('Delete', style: TextStyle(color: Colors.red)),
+                    Icon(Icons.delete, size: 20, color: Colors.red),
+                    SizedBox(width: 8),
+                    Text('Delete', style: TextStyle(color: Colors.red)),
                   ],
                 ),
               ),
-            if (!_isMenuDisabled)
-              PopupMenuItem(
-                value: 'share',
-                child: Row(
-                  children: [
-                    const Icon(Icons.share, size: 20, color: Colors.green),
-                    const SizedBox(width: 8),
-                    Text('Share', style: TextStyle(color: Colors.green[700])),
-                  ],
-                ),
+            const PopupMenuItem(
+              value: 'share',
+              child: Row(
+                children: [
+                  Icon(Icons.share, size: 20, color: Colors.green),
+                  SizedBox(width: 8),
+                  Text('Share', style: TextStyle(color: Colors.green)),
+                ],
               ),
-            if (!_isMenuDisabled)
-              PopupMenuItem(
-                value: 'report',
-                child: Row(
-                  children: [
-                    const Icon(Icons.report, size: 20, color: Colors.orange),
-                    const SizedBox(width: 8),
-                    Text('Report', style: TextStyle(color: Colors.orange[700])),
-                  ],
-                ),
+            ),
+            const PopupMenuItem(
+              value: 'report',
+              child: Row(
+                children: [
+                  Icon(Icons.report, size: 20, color: Colors.orange),
+                  SizedBox(width: 8),
+                  Text('Report', style: TextStyle(color: Colors.orange)),
+                ],
               ),
+            ),
           ],
         ),
       ],
@@ -405,7 +399,7 @@ class _DiaryCardState extends State<DiaryCard> {
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: GestureDetector(
-                onTap: () => _viewAllComments(),
+                onTap: _viewAllComments,
                 child: Text(
                   'View all ${widget.diary.comments.length} comments',
                   style: const TextStyle(
@@ -425,120 +419,112 @@ class _DiaryCardState extends State<DiaryCard> {
   Widget _buildCommentItem(Comment comment) {
     final isCurrentUser = comment.user.id == _getCurrentUserId();
 
-    return GestureDetector(
-      onLongPress: () {
-        setState(() {
-          _selectedCommentId = comment.id;
-          _showCommentMenu = true;
-        });
-      },
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            CircleAvatar(
-              radius: 14,
-              backgroundImage: comment.user.avatarUrl != null &&
-                      comment.user.avatarUrl!.isNotEmpty
-                  ? NetworkImage(comment.user.avatarUrl!)
-                  : null,
-              child: comment.user.avatarUrl == null ||
-                      comment.user.avatarUrl!.isEmpty
-                  ? Text(
-                      comment.user.username.isNotEmpty
-                          ? comment.user.username[0].toUpperCase()
-                          : '?',
-                      style: const TextStyle(fontSize: 10),
-                    )
-                  : null,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          comment.user.username,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 14,
+            backgroundImage: comment.user.avatarUrl != null &&
+                    comment.user.avatarUrl!.isNotEmpty
+                ? NetworkImage(comment.user.avatarUrl!)
+                : null,
+            child: comment.user.avatarUrl == null ||
+                    comment.user.avatarUrl!.isEmpty
+                ? Text(
+                    comment.user.username.isNotEmpty
+                        ? comment.user.username[0].toUpperCase()
+                        : '?',
+                    style: const TextStyle(fontSize: 10),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        comment.user.username,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        comment.content,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 8, top: 4),
+                  child: Row(
+                    children: [
+                      Text(
+                        _formatDate(comment.createdAt),
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      GestureDetector(
+                        onTap: () => _replyToComment(comment.id),
+                        child: const Text(
+                          'Reply',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.blue,
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          comment.content,
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8, top: 4),
-                    child: Row(
-                      children: [
-                        Text(
-                          _formatDate(comment.createdAt),
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey,
+                      ),
+                      if (isCurrentUser) ...[
+                        const SizedBox(width: 12),
+                        GestureDetector(
+                          onTap: () => _editComment(comment),
+                          child: const Text(
+                            'Edit',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.green,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 12),
                         GestureDetector(
-                          onTap: () => _replyToComment(comment.id),
+                          onTap: () => _deleteComment(comment.id),
                           child: const Text(
-                            'Reply',
+                            'Delete',
                             style: TextStyle(
                               fontSize: 10,
-                              color: Colors.blue,
+                              color: Colors.red,
                             ),
                           ),
                         ),
-                        if (isCurrentUser) ...[
-                          const SizedBox(width: 12),
-                          GestureDetector(
-                            onTap: () => _editComment(comment),
-                            child: const Text(
-                              'Edit',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.green,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          GestureDetector(
-                            onTap: () => _deleteComment(comment.id),
-                            child: const Text(
-                              'Delete',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.red,
-                              ),
-                            ),
-                          ),
-                        ],
                       ],
-                    ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -578,11 +564,20 @@ class _DiaryCardState extends State<DiaryCard> {
                 color: Theme.of(context).primaryColor,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.send,
-                color: Colors.white,
-                size: 18,
-              ),
+              child: _isSubmittingComment
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Icon(
+                      Icons.send,
+                      color: Colors.white,
+                      size: 18,
+                    ),
             ),
           ),
         ],
@@ -602,78 +597,34 @@ class _DiaryCardState extends State<DiaryCard> {
         _shareDiary();
         break;
       case 'report':
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Report Diary'),
-            content: const Text('Why are you reporting this diary?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                          'Thank you for your report. We will review it shortly.'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                },
-                child: const Text('Submit Report'),
-              ),
-            ],
-          ),
-        );
+        _reportDiary();
         break;
     }
   }
 
   void _showDeleteConfirmation() {
-    bool isDeleting = false; // Add flag to prevent multiple clicks
-
     showDialog(
       context: context,
-      barrierDismissible: true,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) {
-          return AlertDialog(
-            title: const Text('Delete Diary'),
-            content: const Text(
-                'Are you sure you want to delete this diary? This action cannot be undone.'),
-            actions: [
-              TextButton(
-                onPressed: isDeleting ? null : () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: isDeleting
-                    ? null
-                    : () async {
-                        setState(() => isDeleting = true);
-                        await Future.delayed(const Duration(milliseconds: 50));
-                        if (context.mounted) {
-                          Navigator.pop(context); // Close dialog
-                          widget.onDelete(widget.diary.id); // Trigger delete
-                        }
-                      },
-                child: isDeleting
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text(
-                        'Delete',
-                        style: TextStyle(color: Colors.red),
-                      ),
-              ),
-            ],
-          );
-        },
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Diary'),
+        content: const Text(
+            'Are you sure you want to delete this diary? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              widget.onDelete(widget.diary.id);
+            },
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -704,6 +655,67 @@ class _DiaryCardState extends State<DiaryCard> {
         ],
       ),
     );
+  }
+
+  void _reportDiary() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Report Diary'),
+        content: const Text('Why are you reporting this diary?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                      'Thank you for your report. We will review it shortly.'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            },
+            child: const Text('Submit Report'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _submitComment() async {
+    final content = _commentController.text.trim();
+    if (content.isEmpty) return;
+
+    try {
+      setState(() => _isSubmittingComment = true);
+      
+      await widget.onComment(widget.diary.id, content);
+      
+      setState(() {
+        _commentController.clear();
+        _isCommenting = false;
+        _isSubmittingComment = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Comment posted!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      setState(() => _isSubmittingComment = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to post comment: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _viewAllComments() {
@@ -789,13 +801,15 @@ class _DiaryCardState extends State<DiaryCard> {
     });
   }
 
-  void _editComment(Comment comment) {
-    showDialog(
+  void _editComment(Comment comment) async {
+    final controller = TextEditingController(text: comment.content);
+    
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Edit Comment'),
         content: TextField(
-          controller: TextEditingController(text: comment.content),
+          controller: controller,
           maxLines: 3,
           decoration: const InputDecoration(
             hintText: 'Edit your comment...',
@@ -809,44 +823,58 @@ class _DiaryCardState extends State<DiaryCard> {
           ),
           TextButton(
             onPressed: () {
-              // TODO: Implement comment update
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Comment updated!'),
-                  backgroundColor: Colors.green,
-                ),
-              );
+              final newContent = controller.text.trim();
+              if (newContent.isNotEmpty) {
+                Navigator.pop(context, {
+                  'content': newContent,
+                  'images': comment.images,
+                });
+              }
             },
             child: const Text('Save'),
           ),
         ],
       ),
     );
+    
+    if (result != null) {
+      try {
+        await widget.onUpdateComment?.call(
+          comment.id,
+          result['content']!,
+          result['images'],
+        );
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Comment updated!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update comment: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
-  void _deleteComment(int commentId) {
-    showDialog(
+  void _deleteComment(int commentId) async {
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Comment'),
         content: const Text('Are you sure you want to delete this comment?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
-              // TODO: Implement comment deletion
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Comment deleted!'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            },
+            onPressed: () => Navigator.pop(context, true),
             child: const Text(
               'Delete',
               style: TextStyle(color: Colors.red),
@@ -855,31 +883,31 @@ class _DiaryCardState extends State<DiaryCard> {
         ],
       ),
     );
-  }
-
-  void _submitComment() {
-    final content = _commentController.text.trim();
-    if (content.isEmpty) return;
-
-    widget.onComment(widget.diary.id, content);
-
-    setState(() {
-      _commentController.clear();
-      _isCommenting = false;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Comment posted!'),
-        backgroundColor: Colors.green,
-      ),
-    );
+    
+    if (confirmed == true && mounted) {
+      try {
+        await widget.onDeleteComment?.call(commentId);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Comment deleted!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete comment: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   int _getCurrentUserId() {
-    // TODO: Get from your AuthProvider or UserProvider
-    // This should return the actual current user ID
-    return 1; // Replace with actual user ID
+    // TODO: Replace with actual user ID from AuthProvider
+    return 0;
   }
 
   String _formatDate(DateTime date) {

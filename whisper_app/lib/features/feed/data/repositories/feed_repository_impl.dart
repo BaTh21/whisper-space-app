@@ -1,5 +1,6 @@
 // lib/features/feed/data/repositories/feed_repository_impl.dart
 import 'package:whisper_space_flutter/features/auth/data/models/diary_model.dart';
+
 import '../datasources/feed_api_service.dart';
 
 abstract class FeedRepository {

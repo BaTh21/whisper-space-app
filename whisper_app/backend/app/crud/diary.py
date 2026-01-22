@@ -700,3 +700,32 @@ def get_list_favorite_diarie(db, user_id: int):
     )
     
     return favovites
+def get_comment_by_id(db: Session, comment_id: int) -> Optional[DiaryComment]:
+    """
+    Get a comment by ID with relationships
+    """
+    return db.query(DiaryComment).options(
+        joinedload(DiaryComment.user),
+        joinedload(DiaryComment.diary)
+    ).filter(DiaryComment.id == comment_id).first()
+
+def get_list_favorite_diaries(db: Session, user_id: int) -> List[Diary]:
+    """
+    Get list of favorited diaries with full details
+    """
+    favorites = (
+        db.query(Diary)
+        .join(DiaryFavorite)
+        .options(
+            joinedload(Diary.author),
+            joinedload(Diary.groups),
+            joinedload(Diary.likes).joinedload(DiaryLike.user),
+            joinedload(Diary.comments).joinedload(DiaryComment.user),
+            joinedload(Diary.favorited_by)
+        )
+        .filter(DiaryFavorite.user_id == user_id)
+        .order_by(DiaryFavorite.created_at.desc())
+        .all()
+    )
+    
+    return favorites
