@@ -5,6 +5,7 @@ import 'package:whisper_space_flutter/features/auth/data/models/diary_model.dart
 import 'package:whisper_space_flutter/features/feed/presentation/screens/create_diary_screen.dart';
 import 'package:whisper_space_flutter/features/feed/presentation/screens/edit_diary_full_screen.dart';
 import 'package:whisper_space_flutter/shared/widgets/diary_card.dart';
+import 'package:whisper_space_flutter/features/friend/presentation/screens/friend_screen.dart';
 
 import '../../../../features/feed/data/datasources/feed_api_service.dart';
 import '../../../../features/feed/presentation/providers/feed_provider.dart';
@@ -614,20 +615,7 @@ class FriendsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.group, size: 64, color: Colors.grey),
-          SizedBox(height: 16),
-          Text(
-            'Friends',
-            style: TextStyle(fontSize: 24, color: Colors.grey),
-          ),
-          Text('Coming soon...'),
-        ],
-      ),
-    );
+    return const FriendScreen();
   }
 }
 

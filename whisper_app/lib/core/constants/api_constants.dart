@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';  // Add this
 
 class ApiConstants {
@@ -7,10 +5,15 @@ class ApiConstants {
   static String get baseUrl {
     if (kIsWeb) {
       return 'http://localhost:8000';
-    } else if (Platform.isAndroid) {
-      return 'http://10.0.2.2:8000';
-    } else {
-      return 'http://localhost:8000';
+    }
+
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return 'http://10.0.2.2:8000';
+      case TargetPlatform.iOS:
+        return 'http://localhost:8000';
+      default:
+        return 'http://localhost:8000';
     }
   }
   
