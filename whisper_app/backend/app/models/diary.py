@@ -35,6 +35,7 @@ class Diary(Base):
     groups = relationship("Group", secondary="diary_groups", viewonly=True)
     
     likes = relationship("DiaryLike", back_populates="diary", cascade="all, delete-orphan")
+    favorited_by = relationship("DiaryFavorite", back_populates="diary", cascade="all, delete-orphan")
     comments = relationship("DiaryComment", back_populates="diary", cascade="all, delete-orphan")
     
     favorited_by = relationship(

@@ -17,72 +17,9 @@ class FeedApiService {
   }) : baseUrl = baseUrl ?? ApiConstants.baseUrl;
 
   void _log(String message) {
+    // Use debug print for development
+    // print('[FeedApiService] $message');
   }
-
-  // ============ CREATE DIARY ============
-Future<DiaryModel> createDiary({
-  required String title,
-  required String content,
-  String shareType = 'private', // Frontend can still use "private"
-  List<int>? groupIds,
-  List<String>? imageUrls,
-  List<String>? videoUrls,
-}) async {
-  _log('createDiary() - "$title", shareType: $shareType');
-  
-  try {
-    final token = storageService.getToken();
-    if (token == null) {
-      throw Exception('Not authenticated. Please login again.');
-    }
-
-    // CRITICAL FIX: Convert "private" to "personal" for backend
-    String backendShareType = shareType.toLowerCase();
-    if (backendShareType == 'private') {
-      backendShareType = 'personal'; // Backend expects "personal"
-    }
-
-    // Prepare request
-    final request = {
-      'title': title.trim(),
-      'content': content.trim(),
-      'share_type': backendShareType, // Use converted value
-      'group_ids': groupIds ?? [],
-      'images': imageUrls ?? [],
-      'videos': videoUrls ?? [],
-    };
-
-    _log('📤 Creating diary with data: ${jsonEncode(request)}');
-    
-    final response = await http.post(
-      Uri.parse('$baseUrl/api/v1/diaries/'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode(request),
-    ).timeout(const Duration(seconds: 30));
-
-    _log('📥 Response: ${response.statusCode}');
-    
-    if (response.statusCode == 201) {
-      final data = jsonDecode(response.body);
-      final diary = DiaryModel.fromJson(data);
-      
-      _log('✅ Diary created with ID: ${diary.id}');
-      
-      return diary;
-    } else {
-      _log('❌ API Error: ${response.body}');
-      throw Exception('Failed to create diary: ${response.statusCode}');
-    }
-  } catch (e) {
-    _log('❌ Error creating diary: $e');
-    rethrow;
-  }
-}
-
-
 
   // ============ GET FEED ============
   Future<List<DiaryModel>> getFeed({
@@ -175,161 +112,407 @@ Future<DiaryModel> createDiary({
     }
   }
 
-  // ============ LIKE DIARY ============
-  Future<void> likeDiary(int diaryId) async {
+  // ============ GET USER GROUPS ============
+  Future<List<Group>> getUserGroups() async {
+    _log('getUserGroups()');
+    
     try {
       final token = storageService.getToken();
-      if (token == null) return;
+      if (token == null) {
+        _log('❌ No auth token');
+        return [];
+      }
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/v1/groups/my'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      _log('📥 Groups response: ${response.statusCode}');
       
-      await http.post(
-        Uri.parse('$baseUrl/api/v1/diaries/$diaryId/like'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        final groups = data.map<Group>((json) {
+          return Group.fromJson(json);
+        }).toList();
+        
+        _log('✅ Got ${groups.length} groups from API');
+        return groups;
+      } else {
+        _log('❌ API Error ${response.statusCode}: ${response.body}');
+        return [];
+      }
     } catch (e) {
-      _log('Error liking diary: $e');
+      _log('❌ Network error: $e');
+      return [];
     }
   }
 
-  // ============ SAVE TO FAVORITES ============
-  Future<void> saveToFavorites(int diaryId) async {
+  // ============ CREATE DIARY ============
+  Future<DiaryModel> createDiary({
+    required String title,
+    required String content,
+    String shareType = 'private',
+    List<int>? groupIds,
+    List<String>? imageUrls,
+    List<String>? videoUrls,
+  }) async {
+    _log('createDiary() - "$title", shareType: $shareType');
+    
     try {
       final token = storageService.getToken();
-      if (token == null) return;
+      if (token == null) {
+        throw Exception('Not authenticated. Please login again.');
+      }
+
+      String backendShareType = shareType.toLowerCase();
+      if (backendShareType == 'private') {
+        backendShareType = 'personal';
+      }
+
+      final request = {
+        'title': title.trim(),
+        'content': content.trim(),
+        'share_type': backendShareType,
+        'group_ids': groupIds ?? [],
+        'images': imageUrls ?? [],
+        'videos': videoUrls ?? [],
+      };
+
+      _log('📤 Creating diary with data: ${jsonEncode(request)}');
       
-      await http.post(
-        Uri.parse('$baseUrl/api/v1/diaries/$diaryId/favorites'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/v1/diaries/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(request),
+      ).timeout(const Duration(seconds: 30));
+
+      _log('📥 Response: ${response.statusCode}');
+      
+      if (response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        final diary = DiaryModel.fromJson(data);
+        
+        _log('✅ Diary created with ID: ${diary.id}');
+        
+        return diary;
+      } else {
+        _log('❌ API Error: ${response.body}');
+        throw Exception('Failed to create diary: ${response.statusCode}');
+      }
     } catch (e) {
-      _log('Error saving favorite: $e');
+      _log('❌ Error creating diary: $e');
+      rethrow;
     }
   }
 
-  // ============ REMOVE FROM FAVORITES ============
-  Future<void> removeFromFavorites(int diaryId) async {
+  // ============ UPDATE DIARY ============
+  Future<DiaryModel> updateDiary({
+    required int diaryId,
+    String? title,
+    String? content,
+    String? shareType,
+    List<int>? groupIds,
+    List<String>? imageUrls,
+    List<String>? videoUrls,
+  }) async {
+    _log('updateDiary() - diaryId: $diaryId, shareType: $shareType');
+    
     try {
       final token = storageService.getToken();
-      if (token == null) return;
+      if (token == null) {
+        throw Exception('Not authenticated.');
+      }
+
+      final Map<String, dynamic> request = {};
       
-      await http.delete(
-        Uri.parse('$baseUrl/api/v1/diaries/$diaryId/favorites'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      if (title != null) request['title'] = title.trim();
+      if (content != null) request['content'] = content.trim();
+      if (shareType != null) {
+        String backendShareType = shareType.toLowerCase();
+        if (backendShareType == 'private') {
+          backendShareType = 'personal';
+        }
+        request['share_type'] = backendShareType;
+      }
+      if (groupIds != null) request['group_ids'] = groupIds;
+      if (imageUrls != null) request['images'] = imageUrls;
+      if (videoUrls != null) request['videos'] = videoUrls;
+
+      _log('📤 Updating diary with data: ${jsonEncode(request)}');
+      
+      final response = await http.patch(
+        Uri.parse('$baseUrl/api/v1/diaries/$diaryId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(request),
+      ).timeout(const Duration(seconds: 30));
+
+      _log('📥 Response: ${response.statusCode}');
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return DiaryModel.fromJson(data);
+      } else {
+        _log('❌ API Error: ${response.body}');
+        throw Exception('Failed to update diary: ${response.statusCode}');
+      }
     } catch (e) {
-      _log('Error removing favorite: $e');
+      _log('❌ Error updating diary: $e');
+      rethrow;
+    }
+  }
+
+  // ============ DELETE DIARY ============
+  Future<void> deleteDiary(int diaryId) async {
+    try {
+      final token = await storageService.getToken();
+      if (token == null) {
+        throw Exception('Not authenticated. Please login again.');
+      }
+      
+      final response = await http.delete(
+        Uri.parse('$baseUrl/api/v1/diaries/$diaryId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 30));
+      
+      if (response.statusCode == 200) {
+        return;
+      } else if (response.statusCode == 401) {
+        throw Exception('Session expired. Please login again.');
+      } else if (response.statusCode == 403) {
+        throw Exception('You do not have permission to delete this diary');
+      } else if (response.statusCode == 404) {
+        throw Exception('Diary not found');
+      } else {
+        throw Exception('Failed to delete diary: ${response.statusCode}');
+      }
+    } catch (e) {
+      rethrow;
     }
   }
 
   // ============ UPLOAD MEDIA ============
-Future<String> uploadMedia(File file, {bool isVideo = false}) async {
-  try {
-    final token = storageService.getToken();
-    if (token == null) {
-      throw Exception('No authentication token');
-    }
-    
-    _log('📤 Uploading ${isVideo ? 'video' : 'image'}...');
-    _log('📁 File path: ${file.path}');
-    _log('📊 File size: ${await file.length()} bytes');
-    
-    // Read file as bytes
-    final bytes = await file.readAsBytes();
-    
-    // Convert to base64
-    final base64Data = base64Encode(bytes);
-    
-    // Get file extension
-    final extension = file.path.split('.').last.toLowerCase();
-    
-    // Create proper MIME type
-    String mimeType;
-    if (isVideo) {
-      // Map extensions to proper MIME types
-      switch (extension) {
-        case 'mp4':
-          mimeType = 'video/mp4';
-          break;
-        case 'mov':
-          mimeType = 'video/quicktime';
-          break;
-        case 'avi':
-          mimeType = 'video/x-msvideo';
-          break;
-        case 'webm':
-          mimeType = 'video/webm';
-          break;
-        case 'mkv':
-          mimeType = 'video/x-matroska';
-          break;
-        default:
-          mimeType = 'video/mp4';
+  Future<String> uploadMedia(File file, {bool isVideo = false}) async {
+    try {
+      final token = storageService.getToken();
+      if (token == null) {
+        throw Exception('No authentication token');
       }
-    } else {
-      switch (extension) {
-        case 'jpg':
-        case 'jpeg':
-          mimeType = 'image/jpeg';
-          break;
-        case 'png':
-          mimeType = 'image/png';
-          break;
-        case 'gif':
-          mimeType = 'image/gif';
-          break;
-        case 'webp':
-          mimeType = 'image/webp';
-          break;
-        default:
-          mimeType = 'image/jpeg';
+      
+      _log('📤 Uploading ${isVideo ? 'video' : 'image'}...');
+      _log('📁 File path: ${file.path}');
+      
+      final bytes = await file.readAsBytes();
+      final base64Data = base64Encode(bytes);
+      final extension = file.path.split('.').last.toLowerCase();
+      
+      String mimeType;
+      if (isVideo) {
+        switch (extension) {
+          case 'mp4':
+            mimeType = 'video/mp4';
+            break;
+          case 'mov':
+            mimeType = 'video/quicktime';
+            break;
+          case 'avi':
+            mimeType = 'video/x-msvideo';
+            break;
+          case 'webm':
+            mimeType = 'video/webm';
+            break;
+          case 'mkv':
+            mimeType = 'video/x-matroska';
+            break;
+          default:
+            mimeType = 'video/mp4';
+        }
+      } else {
+        switch (extension) {
+          case 'jpg':
+          case 'jpeg':
+            mimeType = 'image/jpeg';
+            break;
+          case 'png':
+            mimeType = 'image/png';
+            break;
+          case 'gif':
+            mimeType = 'image/gif';
+            break;
+          case 'webp':
+            mimeType = 'image/webp';
+            break;
+          default:
+            mimeType = 'image/jpeg';
+        }
       }
+      
+      final dataUrl = 'data:$mimeType;base64,$base64Data';
+      
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/v1/upload/media'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'data_url': dataUrl,
+          'filename': '${isVideo ? 'video' : 'image'}_${DateTime.now().millisecondsSinceEpoch}.$extension',
+          'is_diary': true,
+        }),
+      );
+      
+      _log('📥 Upload response: ${response.statusCode}');
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final url = data['url'] as String;
+        _log('✅ Upload successful: $url');
+        return url;
+      } else {
+        _log('❌ Upload failed: ${response.body}');
+        throw Exception('Upload failed: ${response.statusCode}');
+      }
+    } catch (e) {
+      _log('❌ Upload error: $e');
+      rethrow;
     }
-    
-    final dataUrl = 'data:$mimeType;base64,$base64Data';
-    
-    _log('📋 MIME type: $mimeType');
-    _log('📦 Data URL length: ${dataUrl.length}');
-    
-    // Upload to server
-    final response = await http.post(
-      Uri.parse('$baseUrl/api/v1/upload/media'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({
-        'data_url': dataUrl,
-        'filename': '${isVideo ? 'video' : 'image'}_${DateTime.now().millisecondsSinceEpoch}.$extension',
-        'is_diary': true,
-      }),
-    );
-    
-    _log('📥 Upload response: ${response.statusCode}');
-    
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      final url = data['url'] as String;
-      final thumbnail = data['thumbnail'] as String?;
-      _log('✅ Upload successful: $url');
-      _log('📸 Thumbnail: $thumbnail');
-      return url;
-    } else {
-      _log('❌ Upload failed: ${response.body}');
-      throw Exception('Upload failed: ${response.statusCode} - ${response.body}');
-    }
-  } catch (e) {
-    _log('❌ Upload error: $e');
-    rethrow;
   }
-}
 
-// ============ COMMENT FUNCTIONALITY ============
-Future<Comment> createComment({
-  required int diaryId,
-  required String content,
-  int? parentId,
-  List<String>? images,
-}) async {
-  _log('createComment() - diaryId: $diaryId, content: ${content.length} chars');
+  // ============ COMMENT FUNCTIONALITY ============
+  Future<Comment> createComment({
+    required int diaryId,
+    required String content,
+    int? parentId,
+    List<String>? images,
+  }) async {
+    _log('createComment() - diaryId: $diaryId');
+    
+    try {
+      final token = storageService.getToken();
+      if (token == null) {
+        throw Exception('Not authenticated');
+      }
+
+      final request = {
+        'content': content,
+        if (parentId != null) 'parent_id': parentId,
+        if (images != null && images.isNotEmpty) 'images': images,
+      };
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/v1/diaries/$diaryId/comments'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(request),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return Comment.fromJson(data);
+      } else {
+        throw Exception('Failed to create comment: ${response.statusCode}');
+      }
+    } catch (e) {
+      _log('❌ Error creating comment: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<Comment>> getComments(int diaryId) async {
+    try {
+      final token = storageService.getToken();
+      if (token == null) return [];
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/v1/diaries/$diaryId/comments'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.map<Comment>((json) => Comment.fromJson(json)).toList();
+      }
+      return [];
+    } catch (e) {
+      _log('Error getting comments: $e');
+      return [];
+    }
+  }
+
+  Future<Comment> updateComment({
+    required int commentId,
+    required String content,
+    List<String>? images,
+  }) async {
+    try {
+      final token = storageService.getToken();
+      if (token == null) {
+        throw Exception('Not authenticated');
+      }
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/api/v1/diaries/comments/$commentId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'content': content,
+          if (images != null) 'images': images,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return Comment.fromJson(data);
+      } else {
+        throw Exception('Failed to update comment: ${response.statusCode}');
+      }
+    } catch (e) {
+      _log('Error updating comment: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteComment(int commentId) async {
+    try {
+      final token = storageService.getToken();
+      if (token == null) {
+        throw Exception('Not authenticated');
+      }
+
+      final response = await http.delete(
+        Uri.parse('$baseUrl/api/v1/diaries/comments/$commentId'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to delete comment: ${response.statusCode}');
+      }
+    } catch (e) {
+      _log('Error deleting comment: $e');
+      rethrow;
+    }
+  }
+
+  // ============ LIKE FUNCTIONALITY ============
+  Future<Map<String, dynamic>> likeDiary(int diaryId) async {
+  _log('likeDiary() - diaryId: $diaryId');
   
   try {
     final token = storageService.getToken();
@@ -337,226 +520,118 @@ Future<Comment> createComment({
       throw Exception('Not authenticated');
     }
 
-    final request = {
-      'content': content,
-      if (parentId != null) 'parent_id': parentId,
-      if (images != null && images.isNotEmpty) 'images': images,
-    };
-
     final response = await http.post(
-      Uri.parse('$baseUrl/api/v1/diaries/$diaryId/comments'),
+      Uri.parse('$baseUrl/api/v1/diaries/$diaryId/like'),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
       },
-      body: jsonEncode(request),
-    );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return Comment.fromJson(data);
-    } else {
-      throw Exception('Failed to create comment: ${response.statusCode}');
-    }
-  } catch (e) {
-    _log('❌ Error creating comment: $e');
-    rethrow;
-  }
-}
-
-Future<List<Comment>> getComments(int diaryId) async {
-  try {
-    final token = storageService.getToken();
-    if (token == null) return [];
-
-    final response = await http.get(
-      Uri.parse('$baseUrl/api/v1/diaries/$diaryId/comments'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
-
-    if (response.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(response.body);
-      return data.map<Comment>((json) => Comment.fromJson(json)).toList();
-    }
-    return [];
-  } catch (e) {
-    _log('Error getting comments: $e');
-    return [];
-  }
-}
-
-Future<void> updateComment({
-  required int commentId,
-  required String content,
-  List<String>? images,
-}) async {
-  try {
-    final token = storageService.getToken();
-    if (token == null) return;
-
-    await http.put(
-      Uri.parse('$baseUrl/api/v1/diaries/comments/$commentId'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({
-        'content': content,
-        if (images != null) 'images': images,
-      }),
-    );
-  } catch (e) {
-    _log('Error updating comment: $e');
-    rethrow;
-  }
-}
-
-Future<void> deleteComment(int commentId) async {
-  try {
-    final token = storageService.getToken();
-    if (token == null) return;
-
-    await http.delete(
-      Uri.parse('$baseUrl/api/v1/diaries/comments/$commentId'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
-  } catch (e) {
-    _log('Error deleting comment: $e');
-    rethrow;
-  }
-}
-
-// ============ DIARY UPDATE & DELETE ============
-Future<DiaryModel> updateDiary({
-  required int diaryId,
-  String? title,
-  String? content,
-  String? shareType,
-  List<int>? groupIds,
-  List<String>? imageUrls,
-  List<String>? videoUrls,
-}) async {
-  _log('updateDiary() - diaryId: $diaryId, shareType: $shareType');
-  
-  try {
-    final token = storageService.getToken();
-    if (token == null) {
-      throw Exception('Not authenticated.');
-    }
-
-    // Prepare request
-    final Map<String, dynamic> request = {};
-    
-    if (title != null) request['title'] = title.trim();
-    if (content != null) request['content'] = content.trim();
-    if (shareType != null) {
-      // CRITICAL FIX: Convert "private" to "personal" for backend
-      String backendShareType = shareType.toLowerCase();
-      if (backendShareType == 'private') {
-        backendShareType = 'personal';
-      }
-      request['share_type'] = backendShareType;
-    }
-    if (groupIds != null) request['group_ids'] = groupIds;
-    if (imageUrls != null) request['images'] = imageUrls;
-    if (videoUrls != null) request['videos'] = videoUrls;
-
-    _log('📤 Updating diary with data: ${jsonEncode(request)}');
-    
-    final response = await http.patch(
-      Uri.parse('$baseUrl/api/v1/diaries/$diaryId'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode(request),
     ).timeout(const Duration(seconds: 30));
 
-    _log('📥 Response: ${response.statusCode}');
+    _log('📥 Like response: ${response.statusCode}');
     
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      return DiaryModel.fromJson(data);
+      _log('✅ Like toggled: ${data['liked']}, count: ${data['likes_count']}');
+      return data;
     } else {
       _log('❌ API Error: ${response.body}');
-      throw Exception('Failed to update diary: ${response.statusCode}');
+      throw Exception('Failed to like diary: ${response.statusCode}');
     }
   } catch (e) {
-    _log('❌ Error updating diary: $e');
+    _log('❌ Error liking diary: $e');
     rethrow;
   }
 }
 
-Future<void> deleteDiary(int diaryId) async {
+
+  // ============ FAVORITE FUNCTIONALITY ============
+  Future<Map<String, dynamic>> saveToFavorites(int diaryId) async {
+  _log('saveToFavorites() - diaryId: $diaryId');
+  
   try {
-    final token = await storageService.getToken();
+    final token = storageService.getToken();
     if (token == null) {
-      throw Exception('Not authenticated. Please login again.');
+      throw Exception('Not authenticated');
     }
-    
-    final response = await http.delete(
-      Uri.parse('$baseUrl/api/v1/diaries/$diaryId'),
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/diaries/$diaryId/favorites'),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
       },
     ).timeout(const Duration(seconds: 30));
+
+    _log('📥 Save favorite response: ${response.statusCode}');
     
-    // Handle 200 OK success response (changed from 204)
-    if (response.statusCode == 200) {
-      print('✅ Diary $diaryId deleted successfully');
-      return;
-    } else if (response.statusCode == 401) {
-      throw Exception('Session expired. Please login again.');
-    } else if (response.statusCode == 403) {
-      throw Exception('You do not have permission to delete this diary');
-    } else if (response.statusCode == 404) {
-      throw Exception('Diary not found');
+    if (response.statusCode == 201) {
+      final data = jsonDecode(response.body);
+      _log('✅ Added to favorites: ${data['id']}');
+      return data;
+    } else if (response.statusCode == 400) {
+      // Already in favorites
+      _log('⚠️ Already in favorites');
+      return {'already_favorited': true};
     } else {
-      throw Exception('Failed to delete diary: ${response.statusCode}');
+      _log('❌ API Error: ${response.body}');
+      throw Exception('Failed to save favorite: ${response.statusCode}');
     }
   } catch (e) {
+    _log('❌ Error saving favorite: $e');
     rethrow;
   }
 }
 
- Future<List<Group>> getUserGroups() async {
-  _log('getUserGroups()');
+  Future<void> removeFromFavorites(int diaryId) async {
+  _log('removeFromFavorites() - diaryId: $diaryId');
   
   try {
     final token = storageService.getToken();
     if (token == null) {
-      _log('❌ No auth token');
-      return [];
+      throw Exception('Not authenticated');
     }
 
-    final response = await http.get(
-      Uri.parse('$baseUrl/api/v1/groups/my'),
+    final response = await http.delete(
+      Uri.parse('$baseUrl/api/v1/diaries/$diaryId/favorites'),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
       },
-    ).timeout(const Duration(seconds: 10));
+    ).timeout(const Duration(seconds: 30));
 
-    _log('📥 Groups response: ${response.statusCode}');
+    _log('📥 Remove favorite response: ${response.statusCode}');
     
     if (response.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(response.body);
-      final groups = data.map<Group>((json) {
-        return Group.fromJson(json);
-      }).toList();
-      
-      _log('✅ Got ${groups.length} groups from API');
-      return groups;
+      _log('✅ Removed from favorites');
     } else {
-      _log('❌ API Error ${response.statusCode}: ${response.body}');
-      return [];
+      _log('❌ API Error: ${response.body}');
+      throw Exception('Failed to remove favorite: ${response.statusCode}');
     }
   } catch (e) {
-    _log('❌ Network error: $e');
-    return [];
+    _log('❌ Error removing favorite: $e');
+    rethrow;
   }
 }
 
+  Future<List<DiaryModel>> getFavoriteDiaries() async {
+    try {
+      final token = storageService.getToken();
+      if (token == null) return [];
 
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/v1/diaries/favorite-list'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.map<DiaryModel>((json) => DiaryModel.fromJson(json)).toList();
+      }
+      return [];
+    } catch (e) {
+      _log('Error getting favorite diaries: $e');
+      return [];
+    }
+  }
 }

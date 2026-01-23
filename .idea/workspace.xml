@@ -5,30 +5,17 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="b12d6fd2-fea8-4182-bfb0-3d162530dba8" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/caches/deviceStreaming.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/deviceManager.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/libraries/Dart_SDK.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/material_theme_project_new.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/whisper-space-app.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/friend/presentation/datasources/friend_api_source.dart" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/friend/presentation/screens/friend_screen.dart" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/whisper_app/lib/utils/snack_bar.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/android/gradle.properties" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/android/gradle.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/lib/core/constants/api_constants.dart" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/lib/core/constants/api_constants.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/lib/core/services/storage_service.dart" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/lib/core/services/storage_service.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/lib/features/auth/presentation/screens/home_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/lib/features/auth/presentation/screens/home_screen.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/linux/flutter/generated_plugin_registrant.cc" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/linux/flutter/generated_plugin_registrant.cc" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/linux/flutter/generated_plugin_registrant.h" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/linux/flutter/generated_plugin_registrant.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/linux/flutter/generated_plugins.cmake" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/linux/flutter/generated_plugins.cmake" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/macos/Flutter/GeneratedPluginRegistrant.swift" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/macos/Flutter/GeneratedPluginRegistrant.swift" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/pubspec.lock" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/pubspec.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/windows/flutter/generated_plugin_registrant.cc" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/windows/flutter/generated_plugin_registrant.cc" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/windows/flutter/generated_plugin_registrant.h" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/windows/flutter/generated_plugin_registrant.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/windows/flutter/generated_plugins.cmake" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/windows/flutter/generated_plugins.cmake" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/whisper_app/backend/app/api/v1/routers/diaries.py" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/backend/app/api/v1/routers/diaries.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/whisper_app/backend/app/crud/diary.py" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/backend/app/crud/diary.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/whisper_app/backend/app/models/diary.py" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/backend/app/models/diary.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/whisper_app/backend/app/models/diary_favorite.py" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/backend/app/models/diary_favorite.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/whisper_app/backend/app/models/diary_like.py" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/backend/app/models/diary_like.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/whisper_app/backend/app/models/user.py" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/backend/app/models/user.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/whisper_app/lib/features/feed/data/datasources/feed_api_service.dart" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/lib/features/feed/data/datasources/feed_api_service.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/whisper_app/lib/features/feed/data/repositories/feed_repository_impl.dart" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/lib/features/feed/data/repositories/feed_repository_impl.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/whisper_app/lib/features/feed/presentation/providers/feed_provider.dart" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/lib/features/feed/presentation/providers/feed_provider.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/whisper_app/lib/features/feed/presentation/screens/feed_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/lib/features/feed/presentation/screens/feed_screen.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/whisper_app/lib/shared/widgets/diary_card.dart" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/lib/shared/widgets/diary_card.dart" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -57,25 +44,25 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Flutter.main.executor&quot;: &quot;Run&quot;,
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.cidr.known.project.marker&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.readMode.enableVisualFormatting&quot;: &quot;true&quot;,
-    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
-    &quot;cf.first.check.clang-format&quot;: &quot;false&quot;,
-    &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
-    &quot;com.google.services.firebase.aqiPopupShown&quot;: &quot;true&quot;,
-    &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;chhoeurn&quot;,
-    &quot;io.flutter.reload.alreadyRun&quot;: &quot;true&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;flutter.settings&quot;,
-    &quot;show.migrate.to.gradle.popup&quot;: &quot;false&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Flutter.main.executor": "Run",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.cidr.known.project.marker": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.readMode.enableVisualFormatting": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "cf.first.check.clang-format": "false",
+    "cidr.known.project.marker": "true",
+    "com.google.services.firebase.aqiPopupShown": "true",
+    "dart.analysis.tool.window.visible": "false",
+    "git-widget-placeholder": "Merging chhoeurn",
+    "io.flutter.reload.alreadyRun": "true",
+    "settings.editor.selected.configurable": "flutter.settings",
+    "show.migrate.to.gradle.popup": "false"
   }
-}</component>
+}]]></component>
   <component name="RunManager">
     <configuration name="main" type="FlutterRunConfigurationType" factoryName="Flutter">
       <option name="filePath" value="$PROJECT_DIR$/whisper_app/lib/main.dart" />

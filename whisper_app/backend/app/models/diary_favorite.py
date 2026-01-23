@@ -7,13 +7,13 @@ class DiaryFavorite(Base):
     __tablename__ = "diary_favorites"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     diary_id = Column(Integer, ForeignKey("diaries.id", ondelete="CASCADE"), nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    diary = relationship("Diary", back_populates="favorited_by")
+    user = relationship("User", back_populates="favorite_diaries")
 
     __table_args__ = (
-        UniqueConstraint("user_id", "diary_id", name="unique_user_diary_favorite"),
+        UniqueConstraint('diary_id', 'user_id', name='unique_diary_user_favorite'),
     )
-
-    user = relationship("User", back_populates="favorite_diaries")
-    diary = relationship("Diary", back_populates="favorited_by")
