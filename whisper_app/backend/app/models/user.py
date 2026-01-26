@@ -17,31 +17,45 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
+    # Relationships
     diaries = relationship("Diary", back_populates="author")
     diary_likes = relationship("DiaryLike", back_populates="user", cascade="all, delete-orphan")
     favorite_diaries = relationship("DiaryFavorite", back_populates="user", cascade="all, delete-orphan")
-    seen_messages = relationship("PrivateMessage", secondary="message_seen_status", back_populates="seen_by_users")
+    
+    # Comments made by user - SPECIFY FOREIGN KEYS
+    diary_comments = relationship(
+        "DiaryComment", 
+        foreign_keys="[DiaryComment.user_id]", 
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+    
+    # Comments where this user was replied to - SPECIFY FOREIGN KEYS
+    comments_replied_to = relationship(
+        "DiaryComment", 
+        foreign_keys="[DiaryComment.reply_to_user_id]", 
+        back_populates="reply_to_user",
+        cascade="all, delete-orphan"
+    )
     
     is_online = Column(Boolean, default=False)
     last_seen = Column(DateTime(timezone=True), default=datetime.utcnow)
     last_activity = Column(DateTime(timezone=True), default=datetime.utcnow)
 
-    message_reactions = relationship("MessageReaction", 
-                                 back_populates="user", 
-                                 cascade="all, delete-orphan")
-# Relationship to seen message statuses
+    # Message relationships
+    message_reactions = relationship("MessageReaction", back_populates="user", cascade="all, delete-orphan")
+    
     seen_message_statuses = relationship(
         "MessageSeenStatus", 
         back_populates="user",
         cascade="all, delete-orphan"
     )
     
-    # Many-to-many relationship to seen messages (read-only)
     seen_messages = relationship(
         "PrivateMessage",
         secondary="message_seen_status",
         back_populates="seen_by_users",
-        viewonly=True  # This is read-only
+        viewonly=True
     )
     
     activities_sent = relationship(
@@ -54,11 +68,3 @@ class User(Base):
         foreign_keys="[Activity.recipient_id]",
         back_populates="recipient"
     )
-
-    favorite_diaries = relationship(
-        "DiaryFavorite",
-        back_populates="user",
-        cascade="all, delete-orphan"
-    )
-
-

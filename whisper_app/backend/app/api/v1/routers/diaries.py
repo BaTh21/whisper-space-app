@@ -7,7 +7,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user, verify_token
 from app.crud.diary import (
     create_diary, get_comment_by_id, get_list_favorite_diaries, get_visible, get_by_id, can_view, create_comment, 
-    create_like, update_comment, delete_comment, update_diary, 
+    create_like, get_visible_users_for_diary, update_comment, delete_comment, update_diary, 
     delete_diary, create_diary_for_group, share_diary, delete_share,
     save_diary_to_favorites, remove_diary_from_favorites, 
     get_favorite_diaries, get_diary_likes_count,
@@ -27,6 +27,8 @@ from app.models.diary_favorite import DiaryFavorite
 from app.crud.activity import create_activity
 from app.models.activity import ActivityType
 from app.services.websocket_manager import manager
+from app.services import image_service_sync
+from app.utils.mentions import extract_mentions
 
 router = APIRouter()
 
@@ -277,9 +279,10 @@ def create_diary_comment(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Create a comment on a diary
+    Create a comment on a diary with proper activity creation
     """
     try:
+        # Get the diary
         diary = db.query(Diary).filter(Diary.id == diary_id).first()
         if not diary:
             raise HTTPException(status_code=404, detail="Diary not found")
@@ -287,35 +290,84 @@ def create_diary_comment(
         if diary.is_deleted:
             raise HTTPException(status_code=404, detail="Diary not found")
         
+        # Check permissions
         if diary.user_id != current_user.id:
             if not can_view(db, diary, current_user.id):
                 raise HTTPException(status_code=403, detail="No permission to comment")
         
+        # Validate reply_to_user_id if provided
+        reply_to_user = None
+        if comment_in.reply_to_user_id:
+            reply_to_user = db.query(User).filter(User.id == comment_in.reply_to_user_id).first()
+            if not reply_to_user:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="User to reply to not found"
+                )
+        
+        # Validate parent comment if provided
+        if comment_in.parent_id:
+            parent_comment = db.query(DiaryComment).filter(
+                DiaryComment.id == comment_in.parent_id,
+                DiaryComment.diary_id == diary_id
+            ).first()
+            if not parent_comment:
+                raise HTTPException(status_code=404, detail="Parent comment not found")
+        
+        # Handle images
+        image_urls = []
+        if comment_in.images:
+            try:
+                image_urls = image_service_sync.save_multiple_images(comment_in.images, is_diary=False)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Failed to upload images: {str(e)}"
+                )
+        
+        # Create comment
         comment = DiaryComment(
             diary_id=diary_id,
             user_id=current_user.id,
             content=comment_in.content,
             parent_id=comment_in.parent_id,
-            images=comment_in.images or [],
-            created_at=datetime.utcnow()
+            reply_to_user_id=comment_in.reply_to_user_id,
+            images=image_urls or [],
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            is_edited=False
         )
         
         db.add(comment)
         db.commit()
-        db.refresh(comment)
+        db.refresh(diary)
         
+        # Load comment with relationships
         comment = db.query(DiaryComment).options(
-            joinedload(DiaryComment.user)
+            joinedload(DiaryComment.user),
+            joinedload(DiaryComment.reply_to_user)
         ).filter(DiaryComment.id == comment.id).first()
         
-        create_activity(
-            db,
-            actor_id=current_user.id,
-            recipient_id=diary.user_id,
-            activity_type=ActivityType.post_comment,
-            post_id=diary_id,
-            extra_data=f"{current_user.username} commented on your diary"
-        )
+        # Create activity notification for diary owner (if not the commenter)
+        if diary.user_id != current_user.id:
+            create_activity(
+                db=db,
+                actor_id=current_user.id,
+                recipient_id=diary.user_id,
+                activity_type=ActivityType.post_comment,
+                post_id=diary_id,
+                comment_id=comment.id,
+                extra_data=f"{current_user.username} commented on your diary"  # String
+            )
+        
+        # Build response
+        reply_to_user_response = None
+        if comment.reply_to_user:
+            reply_to_user_response = CreatorResponse(
+                id=comment.reply_to_user.id,
+                username=comment.reply_to_user.username,
+                avatar_url=comment.reply_to_user.avatar_url
+            )
         
         response = DiaryCommentOut(
             id=comment.id,
@@ -328,22 +380,42 @@ def create_diary_comment(
             content=comment.content,
             images=comment.images or [],
             parent_id=comment.parent_id,
-            created_at=comment.created_at
+            reply_to_user_id=comment.reply_to_user_id,
+            reply_to_user=reply_to_user_response,
+            replies=[],
+            created_at=comment.created_at,
+            is_edited=comment.is_edited,
+            updated_at=comment.updated_at
         )
         
-        # Notify via WebSocket
-        background_tasks.add_task(
-            send_websocket_notification,
-            f"feed_{diary.user_id}",
-            {
-                "type": "new_comment",
-                "comment": response.dict(),
-                "diary_id": diary_id,
-                "user_id": current_user.id,
+        # Enhanced real-time notification with mention support
+        notification_data = {
+            "type": "new_comment",
+            "comment": response.dict(),
+            "diary_id": diary_id,
+            "user": {
+                "id": current_user.id,
                 "username": current_user.username,
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        )
+                "avatar_url": current_user.avatar_url
+            },
+            "timestamp": datetime.utcnow().isoformat(),
+            "action": "created",
+            "diary_title": diary.title
+        }
+        
+        # Broadcast to all users who can view this diary
+        visible_user_ids = get_visible_users_for_diary(db, diary_id)
+        unique_user_ids = set(visible_user_ids)
+        
+        for user_id in unique_user_ids:
+            if user_id == current_user.id:
+                continue  # Don't send to self
+                
+            background_tasks.add_task(
+                send_websocket_notification,
+                f"feed_{user_id}",
+                notification_data
+            )
         
         return response
         
@@ -351,6 +423,8 @@ def create_diary_comment(
         raise
     except Exception as e:
         db.rollback()
+        print(f"Error creating comment: {str(e)}")
+        traceback.print_exc()
         raise HTTPException(
             status_code=500,
             detail=f"Failed to create comment: {str(e)}"
@@ -363,7 +437,7 @@ def get_diary_comments_endpoint(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get all comments for a diary with nested replies
+    Get all comments for a diary with nested replies and mentions
     """
     diary = db.query(Diary).filter(Diary.id == diary_id).first()
     if not diary:
@@ -395,6 +469,16 @@ def get_diary_comments_endpoint(
     
     def build_nested(node):
         comment = node['comment']
+        
+        # Build reply_to_user info if exists
+        reply_to_user_response = None
+        if comment.reply_to_user:
+            reply_to_user_response = CreatorResponse(
+                id=comment.reply_to_user.id,
+                username=comment.reply_to_user.username,
+                avatar_url=comment.reply_to_user.avatar_url
+            )
+        
         return DiaryCommentOut(
             id=comment.id,
             diary_id=comment.diary_id,
@@ -406,8 +490,12 @@ def get_diary_comments_endpoint(
             content=comment.content,
             images=comment.images or [],
             parent_id=comment.parent_id,
+            reply_to_user_id=comment.reply_to_user_id,
+            reply_to_user=reply_to_user_response,
             replies=[build_nested(child) for child in node['children']],
-            created_at=comment.created_at
+            created_at=comment.created_at,
+            is_edited=comment.is_edited,
+            updated_at=comment.updated_at
         )
     
     return [build_nested(node) for node in root_comments]
@@ -421,10 +509,10 @@ def update_comment_by_id(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Update a comment
+    Update a comment with real-time broadcasting
     """
     try:
-        # Use the new function
+        # Get the comment with relationships
         comment = get_comment_by_id(db, comment_id)
         if not comment:
             raise HTTPException(status_code=404, detail="Comment not found")
@@ -432,12 +520,42 @@ def update_comment_by_id(
         if comment.user_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not authorized to edit this comment")
         
-        # Use existing update_comment function
-        updated_comment = update_comment(db, comment_id, comment_data, current_user.id)
+        # Store old data for comparison
+        old_content = comment.content
+        old_images = comment.images.copy() if comment.images else []
+        
+        # Handle image updates
+        new_images = []
+        if comment_data.images:
+            try:
+                new_images = image_service_sync.save_multiple_images(comment_data.images, is_diary=False)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Failed to upload images: {str(e)}"
+                )
+        else:
+            new_images = []
+        
+        # Clean up old images if they're being replaced
+        if old_images and (new_images or comment_data.images == []):
+            # If new images provided or explicitly set to empty, cleanup old
+            for img in old_images:
+                if img not in new_images:
+                    image_service_sync.cleanup_media([img])
+        
+        # Update comment
+        comment.content = comment_data.content
+        comment.images = new_images
+        comment.updated_at = datetime.utcnow()
+        comment.is_edited = True
+        
+        db.commit()
         
         # Reload with relationships
         updated_comment = get_comment_by_id(db, comment_id)
         
+        # Build response
         response = DiaryCommentOut(
             id=updated_comment.id,
             diary_id=updated_comment.diary_id,
@@ -449,26 +567,45 @@ def update_comment_by_id(
             content=updated_comment.content,
             images=updated_comment.images or [],
             parent_id=updated_comment.parent_id,
-            created_at=updated_comment.created_at
+            replies=[],
+            created_at=updated_comment.created_at,
+            is_edited=updated_comment.is_edited,
+            updated_at=updated_comment.updated_at
         )
         
-        # Notify via WebSocket
-        background_tasks.add_task(
-            send_websocket_notification,
-            f"feed_{comment.diary.user_id}",
-            {
-                "type": "comment_updated",
-                "comment": response.dict(),
-                "diary_id": comment.diary_id,
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        )
+        # Enhanced real-time notification for comment update
+        notification_data = {
+            "type": "comment_updated",
+            "comment": response.dict(),
+            "diary_id": comment.diary_id,
+            "user": {
+                "id": current_user.id,
+                "username": current_user.username,
+                "avatar_url": current_user.avatar_url
+            },
+            "timestamp": datetime.utcnow().isoformat(),
+            "action": "updated"
+        }
+        
+        # Broadcast to all users who can view this diary
+        visible_user_ids = get_visible_users_for_diary(db, comment.diary_id)
+        unique_user_ids = set(visible_user_ids)
+        
+        for user_id in unique_user_ids:
+            background_tasks.add_task(
+                send_websocket_notification,
+                f"feed_{user_id}",
+                notification_data
+            )
         
         return response
         
     except HTTPException:
         raise
     except Exception as e:
+        db.rollback()
+        print(f"Error updating comment: {str(e)}")
+        traceback.print_exc()
         raise HTTPException(
             status_code=500,
             detail=f"Failed to update comment: {str(e)}"
@@ -485,7 +622,6 @@ def delete_comment_by_id(
     Delete a comment
     """
     try:
-        # Use the new function
         comment = get_comment_by_id(db, comment_id)
         if not comment:
             raise HTTPException(status_code=404, detail="Comment not found")
@@ -495,26 +631,66 @@ def delete_comment_by_id(
         
         diary_id = comment.diary_id
         
-        # Use existing delete_comment function
-        delete_comment(db, comment_id, current_user.id)
+        diary = db.query(Diary).filter(Diary.id == diary_id).first()
+        if not diary:
+            raise HTTPException(status_code=404, detail="Diary not found")
         
-        # Notify via WebSocket
-        background_tasks.add_task(
-            send_websocket_notification,
-            f"feed_{comment.diary.user_id}",
-            {
-                "type": "comment_deleted",
-                "comment_id": comment_id,
-                "diary_id": diary_id,
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        )
+
+        comment_info = {
+            "id": comment.id,
+            "diary_id": comment.diary_id,
+            "user_id": comment.user_id,
+            "parent_id": comment.parent_id
+        }
+
+        if comment.images:
+            image_service_sync.cleanup_media(comment.images)
+        if comment.replies:
+            for reply in comment.replies:
+                if reply.images:
+                    image_service_sync.cleanup_media(reply.images)
+                db.delete(reply)
         
-        return {"detail": "Comment deleted successfully"}
+        db.delete(comment)
+        db.commit()
+        notification_data = {
+            "type": "comment_deleted",
+            "comment_id": comment_id,
+            "diary_id": diary_id,
+            "user": {
+                "id": current_user.id,
+                "username": current_user.username,
+                "avatar_url": current_user.avatar_url
+            },
+            "timestamp": datetime.utcnow().isoformat(),
+            "action": "deleted",
+            "comment_info": comment_info,
+            "diary_title": diary.title  
+        }
+        
+        visible_user_ids = get_visible_users_for_diary(db, diary_id)
+        unique_user_ids = set(visible_user_ids)
+        
+        for user_id in unique_user_ids:
+            background_tasks.add_task(
+                send_websocket_notification,
+                f"feed_{user_id}",
+                notification_data
+            )
+        
+        return {
+            "detail": "Comment deleted successfully",
+            "comment_id": comment_id,
+            "diary_id": diary_id,
+            "diary_title": diary.title
+        }
         
     except HTTPException:
         raise
     except Exception as e:
+        db.rollback()
+        print(f"Error deleting comment: {str(e)}")
+        traceback.print_exc()
         raise HTTPException(
             status_code=500,
             detail=f"Failed to delete comment: {str(e)}"
@@ -965,6 +1141,38 @@ def delete_diary_by_id(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal server error: {str(e)}"
         )
+@router.get("/comments/{comment_id}/history", response_model=List[dict])
+def get_comment_edit_history(
+    comment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get edit history of a comment (if you want to track edits)
+    """
+    comment = get_comment_by_id(db, comment_id)
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    
+    # Check if user can view the diary
+    diary = db.query(Diary).filter(Diary.id == comment.diary_id).first()
+    if not can_view(db, diary, current_user.id):
+        raise HTTPException(status_code=403, detail="No permission to view comment history")
+    
+    # For now, return basic info. In a more advanced system,
+    # you might have a CommentEditHistory table
+    return [
+        {
+            "action": "created",
+            "timestamp": comment.created_at.isoformat(),
+            "user_id": comment.user_id
+        },
+        {
+            "action": "last_updated",
+            "timestamp": comment.updated_at.isoformat() if comment.updated_at else comment.created_at.isoformat(),
+            "user_id": comment.user_id
+        }
+    ]
 
 # ============ WEB SOCKET ENDPOINT ============
 

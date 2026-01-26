@@ -238,5 +238,13 @@ class WebSocketManager:
         call = self.active_calls.get(chat_id)
         if call and call["status"] == "ringing":
             await self._end_call(chat_id, "timeout")
+async def send_mention_notification(self, user_id: int, data: dict):
+    """Send mention notification to specific user"""
+    user_room = f"feed_{user_id}"
+    await self.broadcast_to_user(user_room, {
+        "type": "mention_notification",
+        **data,
+        "timestamp": datetime.utcnow().isoformat()
+    })        
 
 manager = WebSocketManager()

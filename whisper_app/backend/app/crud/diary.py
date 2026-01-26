@@ -495,44 +495,59 @@ def delete_share(db: Session, share_id: int, current_user_id: int):
     db.commit()
     return {"detail": "Share has been removed"}
 
-def create_comment(db: Session, diary_id: int, current_user: User , content: str, parent_id: Optional[int] = None, images: Optional[List[str]] = None) -> DiaryComment:
+def create_comment(db: Session, diary_id: int, current_user: User, content: str, 
+                  parent_id: Optional[int] = None, reply_to_user_id: Optional[int] = None,
+                  images: Optional[List[str]] = None) -> DiaryComment:
+    """
+    Create a comment with proper relationship handling
+    """
+    # Check diary exists and is not deleted
     diary = db.query(Diary).filter(Diary.id == diary_id, Diary.is_deleted == False).first()
     if not diary:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                           detail="Diary not found")
     
+    # Check parent comment if provided
     if parent_id:
         parent_comment = db.query(DiaryComment).filter(DiaryComment.id == parent_id).first()
         if not parent_comment or parent_comment.diary_id != diary_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                              detail="Parent comment not found")
     
+    # Check reply_to_user exists if provided
+    if reply_to_user_id:
+        reply_user = db.query(User).filter(User.id == reply_to_user_id).first()
+        if not reply_user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                             detail="User to reply to not found")
+    
+    # Handle images
     image_urls = []
     if images:
         image_urls = image_service_sync.save_multiple_images(images, is_diary=False)
     
+    # Create comment
     comment = DiaryComment(
         diary_id=diary_id,
         user_id=current_user.id,
         content=content,
         parent_id=parent_id,
+        reply_to_user_id=reply_to_user_id,
         images=image_urls,
-        created_at=datetime.now(timezone.utc)
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+        is_edited=False
     )
+    
     db.add(comment)
     db.commit()
     db.refresh(comment)
     
-    activity = create_activity(
-        db,
-        actor_id=current_user.id,
-        recipient_id=diary.user_id,
-        activity_type=ActivityType.post_comment,
-        post_id=diary_id,
-        extra_data = f"{current_user.username} comment on your status"
-    )
-    
-    comment = db.query(DiaryComment).options(joinedload(DiaryComment.user)).filter(DiaryComment.id == comment.id).first()
+    # Load relationships
+    comment = db.query(DiaryComment).options(
+        joinedload(DiaryComment.user),
+        joinedload(DiaryComment.reply_to_user)
+    ).filter(DiaryComment.id == comment.id).first()
     
     return comment
 
@@ -564,6 +579,9 @@ def create_like(db: Session, diary_id: int, current_user: User) -> None:
     db.commit()
 
 def get_diary_comments(db: Session, diary_id: int) -> List[DiaryComment]:
+    """
+    Get all comments for a diary with proper relationships loaded
+    """
     diary = db.query(Diary).filter(Diary.id == diary_id, Diary.is_deleted == False).first()
     if not diary:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
@@ -571,7 +589,10 @@ def get_diary_comments(db: Session, diary_id: int) -> List[DiaryComment]:
     
     return (
         db.query(DiaryComment)
-        .options(joinedload(DiaryComment.user))
+        .options(
+            joinedload(DiaryComment.user),
+            joinedload(DiaryComment.reply_to_user)
+        )
         .filter(DiaryComment.diary_id == diary_id)
         .order_by(DiaryComment.created_at.asc())
         .all()
@@ -639,6 +660,10 @@ def update_comment(db: Session,
     if 'content' in update_data:
         comment.content = update_data['content']
     
+    # Mark as edited
+    comment.is_edited = True
+    comment.updated_at = datetime.now(timezone.utc)
+    
     db.commit()
     db.refresh(comment)
     return comment
@@ -702,13 +727,14 @@ def get_list_favorite_diarie(db, user_id: int):
     return favovites
 def get_comment_by_id(db: Session, comment_id: int) -> Optional[DiaryComment]:
     """
-    Get a comment by ID with relationships
+    Get a comment by ID with all relationships
     """
     return db.query(DiaryComment).options(
         joinedload(DiaryComment.user),
-        joinedload(DiaryComment.diary)
+        joinedload(DiaryComment.reply_to_user),
+        joinedload(DiaryComment.diary),
+        joinedload(DiaryComment.parent)
     ).filter(DiaryComment.id == comment_id).first()
-
 def get_list_favorite_diaries(db: Session, user_id: int) -> List[Diary]:
     """
     Get list of favorited diaries with full details
@@ -729,3 +755,53 @@ def get_list_favorite_diaries(db: Session, user_id: int) -> List[Diary]:
     )
     
     return favorites
+def get_visible_users_for_diary(db: Session, diary_id: int) -> List[int]:
+    """
+    Get all user IDs who can view a specific diary
+    """
+    from sqlalchemy import or_, and_
+    from app.models.friend import Friend, FriendshipStatus
+    from app.models.group_member import GroupMember
+    
+    diary = db.query(Diary).filter(Diary.id == diary_id).first()
+    if not diary:
+        return []
+    
+    # Start with diary owner
+    visible_users = {diary.user_id}
+    
+    if diary.share_type == ShareType.public:
+        # For public diaries, all users
+        all_users = db.query(User.id).all()
+        visible_users.update([user.id for user in all_users])
+    
+    elif diary.share_type == ShareType.friends:
+        # Get mutual friends
+        # Friends where diary owner added them
+        friends_added = db.query(Friend.friend_id).filter(
+            Friend.user_id == diary.user_id,
+            Friend.status == FriendshipStatus.accepted
+        ).all()
+        
+        # Friends who added diary owner
+        friends_of_owner = db.query(Friend.user_id).filter(
+            Friend.friend_id == diary.user_id,
+            Friend.status == FriendshipStatus.accepted
+        ).all()
+        
+        visible_users.update([f[0] for f in friends_added + friends_of_owner])
+    
+    elif diary.share_type == ShareType.group:
+        # Get group members
+        group_ids = [dg.group_id for dg in diary.diary_groups]
+        if group_ids:
+            members = db.query(GroupMember.user_id).filter(
+                GroupMember.group_id.in_(group_ids)
+            ).all()
+            visible_users.update([m[0] for m in members])
+    
+    elif diary.share_type == ShareType.personal:
+        # Only diary owner can see personal diaries
+        pass  # Already has owner
+    
+    return list(visible_users)

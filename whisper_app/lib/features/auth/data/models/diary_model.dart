@@ -289,8 +289,12 @@ class Comment extends Equatable {
   final Author user;
   final List<String> images;
   final int? parentId;
+  final int? replyToUserId; 
+  final Author? replyToUser; 
   final List<Comment> replies;
   final int diaryId;
+  final bool isEdited;       
+  final DateTime? updatedAt;
 
   const Comment({
     required this.id,
@@ -299,11 +303,14 @@ class Comment extends Equatable {
     required this.createdAt,
     required this.user,
     required this.images,
-    this.parentId,
+    this.parentId, this.replyToUserId,
+    this.replyToUser,       
     required this.replies,
+    this.isEdited = false,   
+    this.updatedAt,          
   });
 
-  factory Comment.fromJson(Map<String, dynamic> json) {
+    factory Comment.fromJson(Map<String, dynamic> json) {
     return Comment(
       id: json['id'] as int? ?? 0,
       diaryId: json['diary_id'] as int? ?? 0,
@@ -316,22 +323,35 @@ class Comment extends Equatable {
           ? List<String>.from(json['images'] as List)
           : const [],
       parentId: json['parent_id'] as int?,
+      replyToUserId: json['reply_to_user_id'] as int?,     
+      replyToUser: json['reply_to_user'] != null           
+          ? Author.fromJson(json['reply_to_user'] as Map<String, dynamic>)
+          : null,
       replies: json['replies'] is List
           ? (json['replies'] as List)
               .map<Comment>((r) => Comment.fromJson(r as Map<String, dynamic>))
               .toList()
           : const [],
+      isEdited: (json['is_edited'] as bool?) ?? false,     
+      updatedAt: json['updated_at'] is String              
+          ? DateTime.parse(json['updated_at'] as String)
+          : null,
     );
   }
 
   Map<String, dynamic> toJson() => {
         'id': id,
+        'diary_id': diaryId,
         'content': content,
         'created_at': createdAt.toIso8601String(),
         'user': user.toJson(),
         'images': images,
         'parent_id': parentId,
+        'reply_to_user_id': replyToUserId,                  
+        'reply_to_user': replyToUser?.toJson(),            
         'replies': replies.map((r) => r.toJson()).toList(),
+        'is_edited': isEdited,                            
+        'updated_at': updatedAt?.toIso8601String(),         
       };
 
   @override
@@ -342,6 +362,10 @@ class Comment extends Equatable {
         user,
         images,
         parentId,
+        replyToUserId,      
+        replyToUser,        
         replies,
+        isEdited,         
+        updatedAt,         
       ];
 }

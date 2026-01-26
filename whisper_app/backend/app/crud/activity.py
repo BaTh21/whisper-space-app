@@ -1,8 +1,8 @@
 from app.models.activity import Activity, ActivityType
 from sqlalchemy.orm import Session
-
-from app.models.activity import Activity, ActivityType
-from sqlalchemy.orm import Session
+from datetime import datetime
+from typing import Optional
+import json
 
 def create_activity(
     db: Session,
@@ -10,17 +10,19 @@ def create_activity(
     actor_id: int,
     recipient_id: int,
     activity_type: ActivityType,
-    post_id: int | None = None,
-    comment_id: int | None = None,
-    friend_request_id: int | None = None,
-    group_id: int | None = None,
-    extra_data: dict | None = None,
+    post_id: Optional[int] = None,
+    comment_id: Optional[int] = None,
+    friend_request_id: Optional[int] = None,
+    group_id: Optional[int] = None,
+    extra_data: Optional[str] = None, 
 ):
-    # Don't create activity if actor and recipient are the same
+    """
+    Create an activity notification
+    extra_data: Should be a string (or None)
+    """
     if actor_id == recipient_id:
         return None
 
-    # Only limit duplicate activities for friend requests and group invites
     if activity_type in [ActivityType.friend_request, ActivityType.group_invite]:
         query = db.query(Activity).filter(
             Activity.actor_id == actor_id,
@@ -35,10 +37,9 @@ def create_activity(
 
         existing_activity = query.first()
         if existing_activity:
-            # Already exists, return existing instead of creating new
             return existing_activity
 
-    # Create new activity for all other cases
+
     activity = Activity(
         actor_id=actor_id,
         recipient_id=recipient_id,
@@ -47,7 +48,8 @@ def create_activity(
         comment_id=comment_id,
         friend_request_id=friend_request_id,
         group_id=group_id,
-        extra_data=extra_data or {},
+        extra_data=extra_data,  
+        is_read=False,
     )
 
     db.add(activity)
@@ -55,4 +57,3 @@ def create_activity(
     db.refresh(activity)
 
     return activity
-
