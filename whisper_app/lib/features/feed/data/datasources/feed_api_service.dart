@@ -393,45 +393,53 @@ class FeedApiService {
 
   // ============ COMMENT FUNCTIONALITY ============
   Future<Comment> createComment({
-    required int diaryId,
-    required String content,
-    int? parentId,
-    List<String>? images,
-  }) async {
-    _log('createComment() - diaryId: $diaryId');
-    
-    try {
-      final token = storageService.getToken();
-      if (token == null) {
-        throw Exception('Not authenticated');
-      }
-
-      final request = {
-        'content': content,
-        if (parentId != null) 'parent_id': parentId,
-        if (images != null && images.isNotEmpty) 'images': images,
-      };
-
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/v1/diaries/$diaryId/comments'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(request),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return Comment.fromJson(data);
-      } else {
-        throw Exception('Failed to create comment: ${response.statusCode}');
-      }
-    } catch (e) {
-      _log('❌ Error creating comment: $e');
-      rethrow;
+  required int diaryId,
+  required String content,
+  int? parentId,
+  int? replyToUserId,
+  List<String>? images,
+}) async {
+  _log('createComment() - diaryId: $diaryId, parentId: $parentId, replyToUserId: $replyToUserId');
+  
+  try {
+    final token = storageService.getToken();
+    if (token == null) {
+      throw Exception('Not authenticated');
     }
+
+    final request = {
+      'content': content,
+      if (parentId != null && parentId > 0) 'parent_id': parentId, // Only send if > 0
+      if (replyToUserId != null && replyToUserId > 0) 'reply_to_user_id': replyToUserId,
+      if (images != null && images.isNotEmpty) 'images': images,
+    };
+
+    _log('📤 Creating comment with data: ${jsonEncode(request)}');
+    
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/diaries/$diaryId/comments'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(request),
+    ).timeout(const Duration(seconds: 30));
+
+    _log('📥 Comment response: ${response.statusCode}');
+    
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return Comment.fromJson(data);
+    } else {
+      _log('❌ API Error: ${response.body}');
+      throw Exception('Failed to create comment: ${response.statusCode}');
+    }
+  } catch (e) {
+    _log('❌ Error creating comment: $e');
+    rethrow;
   }
+}
+
 
   Future<List<Comment>> getComments(int diaryId) async {
     try {
