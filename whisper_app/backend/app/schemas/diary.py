@@ -155,6 +155,7 @@ class DiaryOut(BaseModel):
 class DiaryCommentCreate(BaseModel):
     content: str
     parent_id: Optional[int] = None
+    reply_to_user_id: Optional[int] = None
     images: Optional[List[str]] = None
     
     @validator('images')
@@ -165,6 +166,11 @@ class DiaryCommentCreate(BaseModel):
             if not img.startswith('data:image/'):
                 raise ValueError('Images must be base64 encoded with data URL')
         return v
+    @validator('reply_to_user_id')
+    def validate_reply_to_user(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError('Invalid user ID')
+        return v
 
 class DiaryCommentOut(TimestampMixin):
     id: int
@@ -173,9 +179,12 @@ class DiaryCommentOut(TimestampMixin):
     content: str
     images: Optional[List[str]] = None
     parent_id: Optional[int] = None
+    reply_to_user_id: Optional[int] = None  
+    reply_to_user: Optional[CreatorResponse] = None 
     replies: Optional[List['DiaryCommentOut']] = None
     created_at: datetime
-
+    is_edited: bool = False
+    updated_at: Optional[datetime] = None 
     model_config = ConfigDict(from_attributes=True)
     
     @field_serializer('created_at')

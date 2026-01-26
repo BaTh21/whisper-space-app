@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 class StorageService {
@@ -14,7 +15,7 @@ class StorageService {
     try {
       _prefs = await SharedPreferences.getInstance();
       
-
+      // ignore: unused_local_variable
       final allKeys = _prefs.getKeys();
       if (getToken() != null) {
       }
