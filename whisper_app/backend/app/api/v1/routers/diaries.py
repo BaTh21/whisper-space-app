@@ -305,14 +305,20 @@ def create_diary_comment(
                     detail="User to reply to not found"
                 )
         
+        # ============ FIX: Handle parent_id = 0 -> None ============
+        parent_id = comment_in.parent_id
+        if parent_id == 0:
+            parent_id = None
+        
         # Validate parent comment if provided
-        if comment_in.parent_id:
+        if parent_id:
             parent_comment = db.query(DiaryComment).filter(
-                DiaryComment.id == comment_in.parent_id,
+                DiaryComment.id == parent_id,
                 DiaryComment.diary_id == diary_id
             ).first()
             if not parent_comment:
                 raise HTTPException(status_code=404, detail="Parent comment not found")
+        # ============ END FIX ============
         
         # Handle images
         image_urls = []
@@ -330,7 +336,7 @@ def create_diary_comment(
             diary_id=diary_id,
             user_id=current_user.id,
             content=comment_in.content,
-            parent_id=comment_in.parent_id,
+            parent_id=parent_id,  # Use the corrected parent_id
             reply_to_user_id=comment_in.reply_to_user_id,
             images=image_urls or [],
             created_at=datetime.utcnow(),
@@ -340,7 +346,7 @@ def create_diary_comment(
         
         db.add(comment)
         db.commit()
-        db.refresh(diary)
+        db.refresh(comment)
         
         # Load comment with relationships
         comment = db.query(DiaryComment).options(
@@ -348,7 +354,9 @@ def create_diary_comment(
             joinedload(DiaryComment.reply_to_user)
         ).filter(DiaryComment.id == comment.id).first()
         
-        # Create activity notification for diary owner (if not the commenter)
+        # ============ ACTIVITY CREATION FOR MENTIONS AND REPLIES ============
+        
+        # 1. Activity for diary owner (if not the commenter)
         if diary.user_id != current_user.id:
             create_activity(
                 db=db,
@@ -357,10 +365,52 @@ def create_diary_comment(
                 activity_type=ActivityType.post_comment,
                 post_id=diary_id,
                 comment_id=comment.id,
-                extra_data=f"{current_user.username} commented on your diary"  # String
+                extra_data=f"{current_user.username} commented on your diary"
             )
         
-        # Build response
+        # 2. Activity for mentioned users
+        mentioned_usernames = extract_mentions(comment_in.content)
+        if mentioned_usernames:
+            mentioned_users = db.query(User).filter(
+                User.username.in_(mentioned_usernames)
+            ).all()
+            
+            for mentioned_user in mentioned_users:
+                # Skip if it's the commenter themselves
+                if mentioned_user.id == current_user.id:
+                    continue
+                
+                # Skip if it's the diary owner (they already got post_comment activity)
+                if mentioned_user.id == diary.user_id:
+                    continue
+                
+                create_activity(
+                    db=db,
+                    actor_id=current_user.id,
+                    recipient_id=mentioned_user.id,
+                    activity_type=ActivityType.mentioned_in_comment,
+                    post_id=diary_id,
+                    comment_id=comment.id,
+                    extra_data=f"{current_user.username} mentioned you in a comment"
+                )
+        
+        # 3. Activity for replied-to user (if different from diary owner and commenter)
+        if comment_in.reply_to_user_id:
+            if (comment_in.reply_to_user_id != current_user.id and 
+                comment_in.reply_to_user_id != diary.user_id):
+                
+                create_activity(
+                    db=db,
+                    actor_id=current_user.id,
+                    recipient_id=comment_in.reply_to_user_id,
+                    activity_type=ActivityType.replied_to_comment,
+                    post_id=diary_id,
+                    comment_id=comment.id,
+                    extra_data=f"{current_user.username} replied to your comment"
+                )
+        
+        # ============ BUILD RESPONSE ============
+        
         reply_to_user_response = None
         if comment.reply_to_user:
             reply_to_user_response = CreatorResponse(
@@ -400,7 +450,9 @@ def create_diary_comment(
             },
             "timestamp": datetime.utcnow().isoformat(),
             "action": "created",
-            "diary_title": diary.title
+            "diary_title": diary.title,
+            "mentioned_users": mentioned_usernames if mentioned_usernames else [],
+            "is_reply": parent_id is not None  # Use the corrected parent_id
         }
         
         # Broadcast to all users who can view this diary
@@ -509,7 +561,7 @@ def update_comment_by_id(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Update a comment with real-time broadcasting
+    Update a comment with real-time broadcasting and mention handling
     """
     try:
         # Get the comment with relationships
@@ -550,12 +602,47 @@ def update_comment_by_id(
         comment.updated_at = datetime.utcnow()
         comment.is_edited = True
         
+        # Handle mentions in updated comment
+        if comment_data.content != old_content:
+            # Extract new mentions
+            new_mentions = extract_mentions(comment_data.content)
+            old_mentions = extract_mentions(old_content)
+            
+            # Find newly added mentions
+            new_usernames = set(new_mentions) - set(old_mentions)
+            
+            if new_usernames:
+                # Create activities for newly mentioned users
+                mentioned_users = db.query(User).filter(
+                    User.username.in_(new_usernames)
+                ).all()
+                
+                for mentioned_user in mentioned_users:
+                    if mentioned_user.id != current_user.id:
+                        create_activity(
+                            db=db,
+                            actor_id=current_user.id,
+                            recipient_id=mentioned_user.id,
+                            activity_type=ActivityType.mentioned_in_comment,
+                            post_id=comment.diary_id,
+                            comment_id=comment.id,
+                            extra_data=f"{current_user.username} mentioned you in a comment"
+                        )
+        
         db.commit()
         
         # Reload with relationships
         updated_comment = get_comment_by_id(db, comment_id)
         
         # Build response
+        reply_to_user_response = None
+        if updated_comment.reply_to_user:
+            reply_to_user_response = CreatorResponse(
+                id=updated_comment.reply_to_user.id,
+                username=updated_comment.reply_to_user.username,
+                avatar_url=updated_comment.reply_to_user.avatar_url
+            )
+        
         response = DiaryCommentOut(
             id=updated_comment.id,
             diary_id=updated_comment.diary_id,
@@ -567,6 +654,8 @@ def update_comment_by_id(
             content=updated_comment.content,
             images=updated_comment.images or [],
             parent_id=updated_comment.parent_id,
+            reply_to_user_id=updated_comment.reply_to_user_id,
+            reply_to_user=reply_to_user_response,
             replies=[],
             created_at=updated_comment.created_at,
             is_edited=updated_comment.is_edited,
@@ -635,7 +724,6 @@ def delete_comment_by_id(
         if not diary:
             raise HTTPException(status_code=404, detail="Diary not found")
         
-
         comment_info = {
             "id": comment.id,
             "diary_id": comment.diary_id,
@@ -653,6 +741,7 @@ def delete_comment_by_id(
         
         db.delete(comment)
         db.commit()
+        
         notification_data = {
             "type": "comment_deleted",
             "comment_id": comment_id,
@@ -695,6 +784,7 @@ def delete_comment_by_id(
             status_code=500,
             detail=f"Failed to delete comment: {str(e)}"
         )
+
 
 # ============ LIKE ENDPOINTS ============
 
@@ -944,6 +1034,7 @@ def get_favorite_diaries_endpoint(
     """
     return get_favorite_diaries(db, current_user.id)
 
+
 @router.get("/favorite-list", response_model=List[DiaryOut])
 def get_favorite_diaries_list_endpoint(
     db: Session = Depends(get_db),
@@ -1014,6 +1105,7 @@ def get_favorite_diaries_list_endpoint(
             status_code=500,
             detail=f"Failed to get favorite diaries: {str(e)}"
         )
+
 
 # ============ DIARY UPDATE & DELETE ============
 

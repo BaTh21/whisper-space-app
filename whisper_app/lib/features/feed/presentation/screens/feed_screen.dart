@@ -140,8 +140,9 @@ class _FeedScreenState extends State<FeedScreen> {
           diary: diary,
           onLike: () => _handleLike(provider, diary.id),
           onFavorite: () => _handleFavorite(provider, diary.id, isOwner),
-          onComment: (diaryId, content) =>
-              _handleComment(provider, diaryId, content),
+          onComment: (diaryId, content, parentId, replyToUserId) =>
+              _handleComment(
+                  provider, diaryId, content, parentId, replyToUserId),
           onEdit: (diaryToEdit) =>
               _handleEditDiary(context, provider, diaryToEdit),
           onDelete: (diaryId) => _handleDeleteDiary(context, provider, diaryId),
@@ -162,7 +163,8 @@ class _FeedScreenState extends State<FeedScreen> {
   void _handleFavorite(FeedProvider provider, int diaryId, bool isOwner) async {
     try {
       final diary = provider.diaries.firstWhere((d) => d.id == diaryId);
-      final isCurrentlyFavorited = diary.favoritedUserIds.contains(_currentUserId);
+      final isCurrentlyFavorited =
+          diary.favoritedUserIds.contains(_currentUserId);
 
       if (isCurrentlyFavorited) {
         await provider.removeFromFavorites(diaryId);
@@ -176,11 +178,15 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
-  void _handleComment(FeedProvider provider, int diaryId, String content) async {
+  void _handleComment(FeedProvider feedProvider, int diaryId, String content,
+      int? parentId, int? replyToUserId) async {
+    // Add parameters
     try {
-      await provider.createComment(
+      await feedProvider.createComment(
         diaryId: diaryId,
         content: content,
+        parentId: parentId,
+        replyToUserId: replyToUserId, // Pass this
       );
       _showSuccessSnackBar('Comment posted!');
     } catch (e) {
@@ -188,7 +194,8 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
-  void _handleEditDiary(BuildContext context, FeedProvider provider, DiaryModel diary) async {
+  void _handleEditDiary(
+      BuildContext context, FeedProvider provider, DiaryModel diary) async {
     final feedApiService = Provider.of<FeedApiService>(context, listen: false);
 
     final updatedDiary = await Navigator.push<DiaryModel>(
@@ -232,7 +239,8 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
-  void _handleDeleteDiary(BuildContext context, FeedProvider provider, int diaryId) async {
+  void _handleDeleteDiary(
+      BuildContext context, FeedProvider provider, int diaryId) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(

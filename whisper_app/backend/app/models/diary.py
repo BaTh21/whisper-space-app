@@ -17,7 +17,6 @@ class Diary(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    comment_count = Column(Integer, default=0)
     title = Column(String(255), nullable=True)
     content = Column(Text, nullable=True)
     share_type = Column(Enum(ShareType), nullable=False)

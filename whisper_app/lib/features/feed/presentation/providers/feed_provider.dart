@@ -150,35 +150,37 @@ class FeedProvider with ChangeNotifier {
 
   // ============ COMMENT OPERATIONS ============
   Future<Comment> createComment({
-    required int diaryId,
-    required String content,
-    int? parentId,
-    List<String>? images,
-  }) async {
-    try {
-      final comment = await feedApiService.createComment(
-        diaryId: diaryId,
-        content: content,
-        parentId: parentId,
-        images: images,
-      );
+  required int diaryId,
+  required String content,
+  int? parentId,
+  int? replyToUserId, // ADD THIS PARAMETER
+  List<String>? images,
+}) async {
+  try {
+    final comment = await feedApiService.createComment(
+      diaryId: diaryId,
+      content: content,
+      parentId: parentId,
+      replyToUserId: replyToUserId, // PASS THIS
+      images: images,
+    );
+    
+    final diaryIndex = _diaries.indexWhere((d) => d.id == diaryId);
+    if (diaryIndex != -1) {
+      final diary = _diaries[diaryIndex];
+      final comments = List<Comment>.from(diary.comments);
+      comments.add(comment);
       
-      final diaryIndex = _diaries.indexWhere((d) => d.id == diaryId);
-      if (diaryIndex != -1) {
-        final diary = _diaries[diaryIndex];
-        final comments = List<Comment>.from(diary.comments);
-        comments.add(comment);
-        
-        final updatedDiary = _createUpdatedDiary(diary, comments: comments);
-        _diaries[diaryIndex] = updatedDiary;
-        notifyListeners();
-      }
-      
-      return comment;
-    } catch (e) {
-      rethrow;
+      final updatedDiary = _createUpdatedDiary(diary, comments: comments);
+      _diaries[diaryIndex] = updatedDiary;
+      notifyListeners();
     }
+    
+    return comment;
+  } catch (e) {
+    rethrow;
   }
+}
 
   Future<Comment> updateComment({
     required int commentId,

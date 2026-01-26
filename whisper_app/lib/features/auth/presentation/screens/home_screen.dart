@@ -355,8 +355,10 @@ class _FeedTabState extends State<FeedTab> {
                           onLike: () => _handleLike(feedProvider, diary.id),
                           onFavorite: () =>
                               _handleFavorite(feedProvider, diary.id, isOwner),
-                          onComment: (diaryId, content) =>
-                              _handleComment(feedProvider, diaryId, content),
+                          onComment: (diaryId, content, parentId,
+                                  replyToUserId) => 
+                              _handleComment(feedProvider, diaryId, content,
+                                  parentId, replyToUserId),
                           onEdit: (diaryToEdit) => _handleEditDiary(
                               context, feedProvider, diaryToEdit),
                           onDelete: (diaryId) => _handleDeleteDiary(
@@ -421,12 +423,15 @@ class _FeedTabState extends State<FeedTab> {
     }
   }
 
-  void _handleComment(
-      FeedProvider feedProvider, int diaryId, String content) async {
+  void _handleComment(FeedProvider feedProvider, int diaryId, String content,
+      int? parentId, int? replyToUserId) async {
+    // UPDATE SIGNATURE
     try {
       await feedProvider.createComment(
         diaryId: diaryId,
         content: content,
+        parentId: parentId,
+        replyToUserId: replyToUserId, // PASS THIS
       );
       _showSuccessSnackBar('Comment posted!');
     } catch (e) {
