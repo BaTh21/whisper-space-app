@@ -23,15 +23,17 @@ class StorageService {
       rethrow;
     }
   }
+
+  String? getToken() {
+    if (_prefs == null) throw Exception('StorageService not initialized');
+    final token = _prefs.getString(_tokenKey);
+    return token;
+  }
   
   // Token management
   Future<void> saveToken(String token) async {
+    if (_prefs == null) throw Exception('StorageService not initialized');
     await _prefs.setString(_tokenKey, token);
-  }
-  
-  String? getToken() {
-    final token = _prefs.getString(_tokenKey);
-    return token;
   }
   
   Future<void> saveRefreshToken(String refreshToken) async {
@@ -74,6 +76,7 @@ class StorageService {
   }
   
   bool isLoggedIn() {
+    if (_prefs == null) throw Exception('StorageService not initialized');
     final loggedIn = _prefs.getBool(_isLoggedInKey) ?? false;
     return loggedIn;
   }
