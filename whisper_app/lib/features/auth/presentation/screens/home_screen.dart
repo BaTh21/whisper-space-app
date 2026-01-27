@@ -6,6 +6,7 @@ import 'package:whisper_space_flutter/features/feed/presentation/screens/create_
 import 'package:whisper_space_flutter/features/feed/presentation/screens/edit_diary_full_screen.dart';
 import 'package:whisper_space_flutter/shared/widgets/diary_card.dart';
 import 'package:whisper_space_flutter/features/friend/presentation/screens/friend_screen.dart';
+import 'package:whisper_space_flutter/features/chat/chat_screen.dart';
 
 import '../../../../features/feed/data/datasources/feed_api_service.dart';
 import '../../../../features/feed/presentation/providers/feed_provider.dart';
@@ -592,26 +593,12 @@ class _FeedTabState extends State<FeedTab> {
   }
 }
 
-// ============ OTHER TABS (Simplified) ============
 class MessagesTab extends StatelessWidget {
   const MessagesTab({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.chat_bubble, size: 64, color: Colors.grey),
-          SizedBox(height: 16),
-          Text(
-            'Messages',
-            style: TextStyle(fontSize: 24, color: Colors.grey),
-          ),
-          Text('Coming soon...'),
-        ],
-      ),
-    );
+    return const ChatScreen();
   }
 }
 

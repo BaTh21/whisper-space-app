@@ -5,17 +5,19 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="b12d6fd2-fea8-4182-bfb0-3d162530dba8" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/whisper_app/backend/app/api/v1/routers/diaries.py" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/backend/app/api/v1/routers/diaries.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/backend/app/crud/diary.py" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/backend/app/crud/diary.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/backend/app/models/diary.py" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/backend/app/models/diary.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/backend/app/models/diary_favorite.py" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/backend/app/models/diary_favorite.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/backend/app/models/diary_like.py" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/backend/app/models/diary_like.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/backend/app/models/user.py" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/backend/app/models/user.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/lib/features/feed/data/datasources/feed_api_service.dart" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/lib/features/feed/data/datasources/feed_api_service.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/lib/features/feed/data/repositories/feed_repository_impl.dart" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/lib/features/feed/data/repositories/feed_repository_impl.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/lib/features/feed/presentation/providers/feed_provider.dart" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/lib/features/feed/presentation/providers/feed_provider.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/lib/features/feed/presentation/screens/feed_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/lib/features/feed/presentation/screens/feed_screen.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/lib/shared/widgets/diary_card.dart" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/lib/shared/widgets/diary_card.dart" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/chat_api_service.dart" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/chat_screen.dart" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/create_group_dialog.dart" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/model/chat_model/chat_list_model.dart" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/model/group_message_model/group_message_model.dart" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/model/group_model/group_details_model.dart" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/model/group_model/group_image_model.dart" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/model/group_model/user_model.dart" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/screens/group/group_chat_screen.dart" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/screens/private/private_chat_screen.dart" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/whisper_app/lib/utils/format_time.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/whisper_app/lib/features/auth/presentation/screens/home_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/lib/features/auth/presentation/screens/home_screen.dart" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -33,6 +35,11 @@
     </option>
   </component>
   <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="main" />
+      </map>
+    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="ProjectColorInfo">{
@@ -57,12 +64,18 @@
     &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
     &quot;com.google.services.firebase.aqiPopupShown&quot;: &quot;true&quot;,
     &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;Merging chhoeurn&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;chhoeurn&quot;,
     &quot;io.flutter.reload.alreadyRun&quot;: &quot;true&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;flutter.settings&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;editor.preferences.fonts.default&quot;,
     &quot;show.migrate.to.gradle.popup&quot;: &quot;false&quot;
   }
 }</component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="D:\Coding\whisper-space-app\whisper_app\lib\features\chat" />
+      <recent name="D:\Coding\whisper-space-app\whisper_app\lib\features\chat\model" />
+    </key>
+  </component>
   <component name="RunManager">
     <configuration name="main" type="FlutterRunConfigurationType" factoryName="Flutter">
       <option name="filePath" value="$PROJECT_DIR$/whisper_app/lib/main.dart" />
@@ -91,6 +104,11 @@
           <url>file://$PROJECT_DIR$/whisper_app/lib/core/services/auth_service.dart</url>
           <line>6</line>
           <option name="timeStamp" value="3" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="Dart">
+          <url>file://$PROJECT_DIR$/whisper_app/lib/features/chat/model/chat_model/chat_list_model.dart</url>
+          <line>30</line>
+          <option name="timeStamp" value="4" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>
