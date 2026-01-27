@@ -656,6 +656,7 @@ class _ProfileTabState extends State<ProfileTab> {
     super.initState();
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     _usernameController = TextEditingController(text: authProvider.currentUser?.username ?? '');
+    
     // Refresh user data when profile opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshUserData();
@@ -764,9 +765,14 @@ class _ProfileTabState extends State<ProfileTab> {
     
     final newUsername = _usernameController.text.trim();
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final currentUsername = authProvider.currentUser?.username;
+    final currentUser = authProvider.currentUser;
     
-    if (newUsername == currentUsername) {
+    if (currentUser == null) {
+      _showSnackBar('Please login first', true);
+      return;
+    }
+    
+    if (newUsername == currentUser.username) {
       setState(() => _isEditingUsername = false);
       return;
     }
@@ -825,9 +831,22 @@ class _ProfileTabState extends State<ProfileTab> {
       builder: (context, authProvider, child) {
         final user = authProvider.currentUser;
         
+        if (user == null) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 20),
+                Text('Loading profile...'),
+              ],
+            ),
+          );
+        }
+        
         // Get dynamic avatar URL from backend
-        String? avatarUrl = user?.avatarUrl;
-        bool hasAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
+        final avatarUrl = user.avatarUrl;
+        final hasAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -865,10 +884,10 @@ class _ProfileTabState extends State<ProfileTab> {
                                     )
                                   : hasAvatar
                                       ? Image.network(
-                                          avatarUrl!, // DYNAMIC URL FROM BACKEND
+                                          avatarUrl,
                                           fit: BoxFit.cover,
                                           errorBuilder: (context, error, stackTrace) {
-                                            // Fallback to default avatar if image fails
+                                            print('❌ Avatar load error: $error');
                                             return Container(
                                               color: const Color(0xFF6C63FF),
                                               child: const Icon(
@@ -956,7 +975,7 @@ class _ProfileTabState extends State<ProfileTab> {
                                             onPressed: () {
                                               setState(() {
                                                 _isEditingUsername = false;
-                                                _usernameController.text = user?.username ?? '';
+                                                _usernameController.text = user.username;
                                               });
                                             },
                                           ),
@@ -991,7 +1010,7 @@ class _ProfileTabState extends State<ProfileTab> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Text(
-                                  user?.username ?? 'User',
+                                  user.username,
                                   style: const TextStyle(
                                     fontSize: 24,
                                     fontWeight: FontWeight.bold,
@@ -1012,10 +1031,48 @@ class _ProfileTabState extends State<ProfileTab> {
                       
                       const SizedBox(height: 4),
                       Text(
-                        user?.email ?? '',
+                        user.email,
                         style: const TextStyle(
                           fontSize: 16,
                           color: Colors.grey,
+                        ),
+                      ),
+                      
+                      // Bio if available
+                      if (user.bio != null && user.bio!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Text(
+                            user.bio!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                      
+                      // Account verification status
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              user.isVerified ? Icons.verified : Icons.verified_outlined,
+                              size: 16,
+                              color: user.isVerified ? Colors.green : Colors.grey,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              user.isVerified ? 'Verified' : 'Not Verified',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: user.isVerified ? Colors.green : Colors.grey,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       
@@ -1054,19 +1111,28 @@ class _ProfileTabState extends State<ProfileTab> {
 
               const SizedBox(height: 20),
 
-              // Stats
+              // Account Info Card
               Card(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: const [
-                      _StatItem(value: '24', label: 'Posts'),
-                      _StatItem(value: '128', label: 'Friends'),
-                      _StatItem(value: '15', label: 'Notes'),
-                      _StatItem(value: '42', label: 'Likes'),
-                    ],
-                  ),
+                child: Column(
+                  children: [
+                    ListTile(
+                      leading: const Icon(Icons.calendar_today, color: Color(0xFF6C63FF)),
+                      title: const Text('Member Since'),
+                      subtitle: Text(
+                        '${user.createdAt.day}/${user.createdAt.month}/${user.createdAt.year}',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ),
+                    const Divider(height: 0),
+                    ListTile(
+                      leading: const Icon(Icons.update, color: Color(0xFF6C63FF)),
+                      title: const Text('Last Updated'),
+                      subtitle: Text(
+                        '${user.updatedAt.day}/${user.updatedAt.month}/${user.updatedAt.year}',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ),
+                  ],
                 ),
               ),
 
@@ -1135,37 +1201,6 @@ class _ProfileTabState extends State<ProfileTab> {
       title: Text(title),
       trailing: const Icon(Icons.chevron_right, color: Colors.grey),
       onTap: onTap,
-    );
-  }
-}
-
-class _StatItem extends StatelessWidget {
-  final String value;
-  final String label;
-
-  const _StatItem({required this.value, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF6C63FF),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Colors.grey,
-          ),
-        ),
-      ],
     );
   }
 }
