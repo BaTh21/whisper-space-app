@@ -1,4 +1,9 @@
+import 'dart:io';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:whisper_space_flutter/core/constants/api_constants.dart';
+
 import '../../../../../core/services/auth_service.dart';
 import '../../../../../core/services/storage_service.dart';
 import '../../../data/models/user_model.dart';
@@ -166,9 +171,129 @@ Future<RegisterResponse> register(
       _setLoading(false);
     }
   }
+  Future<bool> uploadAvatar(File imageFile) async {
+  _setLoading(true);
+  try {
+    final dio = Dio();
+    
+    // Get token
+    final token = await storageService.getToken();
+    if (token == null) {
+      _error = 'Not authenticated';
+      _setLoading(false);
+      return false;
+    }
+    
+    // Create form data
+    final formData = FormData.fromMap({
+      'avatar': await MultipartFile.fromFile(
+        imageFile.path,
+        filename: 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      ),
+    });
+    
+    // Make request
+    final response = await dio.post(
+      '${ApiConstants.baseUrl}/api/v1/avatars/upload',
+      data: formData,
+      options: Options(
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'multipart/form-data',
+        },
+      ),
+    );
+    
+    if (response.statusCode == 200) {
+      // Update current user with new avatar URL
+      final avatarUrl = response.data['avatar_url'];
+      if (_currentUser != null && avatarUrl != null) {
+        _currentUser = _currentUser!.copyWith(avatarUrl: avatarUrl);
+        
+        // Save updated user to storage
+        await storageService.saveUserData(_currentUser!.toJson());
+        
+        notifyListeners();
+      }
+      
+      _setLoading(false);
+      return true;
+    }
+    
+    _error = 'Failed to upload avatar';
+    _setLoading(false);
+    return false;
+  } catch (e) {
+    _error = 'Error uploading avatar: $e';
+    _setLoading(false);
+    return false;
+  }
+}
+
+Future<bool> deleteAvatar() async {
+  _setLoading(true);
+  try {
+    final dio = Dio();
+    
+    // Get token
+    final token = await storageService.getToken();
+    if (token == null) {
+      _error = 'Not authenticated';
+      _setLoading(false);
+      return false;
+    }
+    
+    // Make request
+    final response = await dio.delete(
+      '${ApiConstants.baseUrl}/api/v1/avatars/delete',
+      options: Options(
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      ),
+    );
+    
+    if (response.statusCode == 200) {
+      // Update current user to remove avatar URL
+      if (_currentUser != null) {
+        _currentUser = _currentUser!.copyWith(avatarUrl: null);
+        
+        // Save updated user to storage
+        await storageService.saveUserData(_currentUser!.toJson());
+        
+        notifyListeners();
+      }
+      
+      _setLoading(false);
+      return true;
+    }
+    
+    _error = 'Failed to delete avatar';
+    _setLoading(false);
+    return false;
+  } catch (e) {
+    _error = 'Error deleting avatar: $e';
+    _setLoading(false);
+    return false;
+  }
+}
+Future<void> getCurrentUser() async {
+  try {
+    final token = await storageService.getToken();
+    if (token != null) {
+      final user = await authService.getCurrentUser(token);
+      _currentUser = user;
+      await storageService.saveUserData(user.toJson());
+      notifyListeners();
+    }
+  } catch (e) {
+    print('Error fetching user: $e');
+  }
+}
   
   void _setLoading(bool value) {
     _isLoading = value;
     notifyListeners();
   }
+
 }
