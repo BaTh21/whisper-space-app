@@ -119,16 +119,21 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           onTap: _showGroupDialog,
           child: Row(
             children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundImage: group!.cover != null
-                    ? NetworkImage(group!.cover!)
-                    : null,
-                backgroundColor: Colors.grey[300],
-                child: group!.cover == null
-                    ? Text(group!.name[0].toUpperCase(),
-                    style: const TextStyle(fontWeight: FontWeight.bold))
-                    : null,
+              SizedBox(
+                width: 48,
+                height: 48,
+                child:
+                CircleAvatar(
+                  radius: 18,
+                  backgroundImage: group!.cover != null
+                      ? NetworkImage(group!.cover!)
+                      : null,
+                  backgroundColor: Colors.grey[300],
+                  child: group!.cover == null
+                      ? Text(group!.name[0].toUpperCase(),
+                      style: const TextStyle(fontWeight: FontWeight.bold))
+                      : null,
+                ),
               ),
               const SizedBox(width: 8),
               Text(group!.name),

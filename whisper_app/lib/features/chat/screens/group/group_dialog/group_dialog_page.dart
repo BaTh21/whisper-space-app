@@ -84,12 +84,17 @@ class _GroupDialogPageState extends State<GroupDialogPage> {
   late GroupDetailsModel group;
   late List<UserModel> members;
   final ImagePicker _picker = ImagePicker();
+  bool _isDescriptionExpanded = false;
+
+  String _searchQuery = '';
+  List<UserModel> _filteredMembers = [];
 
   @override
   void initState() {
     super.initState();
     group = widget.group;
     members = widget.members;
+    _filteredMembers = List.from(members);
   }
 
   Future<void> _uploadCover() async {
@@ -256,7 +261,7 @@ class _GroupDialogPageState extends State<GroupDialogPage> {
     }
   }
 
-  Future<void> _deleteGroup() async{
+  Future<void> _deleteGroup() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -269,8 +274,7 @@ class _GroupDialogPageState extends State<GroupDialogPage> {
               child: const Text('Cancel')),
           TextButton(
               onPressed: () => Navigator.pop(_, true),
-              style:
-              TextButton.styleFrom(foregroundColor: Colors.red),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
               child: const Text('Delete')),
         ],
       ),
@@ -291,6 +295,128 @@ class _GroupDialogPageState extends State<GroupDialogPage> {
     }
   }
 
+  Future<void> _showInviteUserDialog() async {
+    List<UserModel> results = [];
+
+    await Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return Scaffold(
+            backgroundColor: Colors.black.withOpacity(0.3),
+            body: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(1, 0),
+                end: Offset.zero,
+              ).animate(animation),
+              child: Material(
+                color: Colors.white,
+                child: StatefulBuilder(
+                  builder: (context, setStateDialog) {
+                    return Column(
+                      children: [
+                        AppBar(
+                          title: const Text('Invite User'),
+                          leading: IconButton(
+                            icon: const Icon(Icons.arrow_back),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: TextField(
+                            decoration: InputDecoration(
+                              hintText: 'Search user...',
+                              prefixIcon: const Icon(Icons.search),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            onChanged: (query) async {
+                              try {
+                                final users = await widget.chatApi.searchUsers(query);
+                                final filtered = users
+                                    .where((u) => !members.any((m) => m.id == u.id))
+                                    .toList();
+                                setStateDialog(() => results = filtered);
+                              } catch (e) {
+                                debugPrint('Error searching users: $e');
+                              }
+                            },
+                          ),
+                        ),
+                        Expanded(
+                          child: results.isEmpty
+                              ? const Center(child: Text('No users found'))
+                              : ListView.builder(
+                            itemCount: results.length,
+                            itemBuilder: (_, index) {
+                              final user = results[index];
+                              return ListTile(
+                                title: Text(user.username),
+                                subtitle: Text(user.email ?? ''),
+                                trailing: ElevatedButton(
+                                  child: const Text('Invite'),
+                                  style: ElevatedButton.styleFrom(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(3),
+                                    ),
+                                  ),
+                                  onPressed: () async {
+                                    try {
+                                      await widget.chatApi
+                                          .inviteUser(group.id, user.id);
+                                      showTopSnackBar(
+                                          context, '${user.username} invited!');
+                                      final updatedMembers =
+                                      await widget.chatApi
+                                          .getGroupMembers(group.id);
+                                      setState(() {
+                                        members = updatedMembers;
+                                        _filteredMembers = updatedMembers
+                                            .where((m) =>
+                                        m.username
+                                            .toLowerCase()
+                                            .contains(_searchQuery) ||
+                                            (m.email
+                                                ?.toLowerCase()
+                                                .contains(
+                                                _searchQuery) ??
+                                                false))
+                                            .toList();
+                                      });
+                                      Navigator.pop(context);
+                                    } catch (e) {
+                                      showTopSnackBar(context, 'Error: $e');
+                                    }
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 300),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(1, 0), // from right
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
@@ -300,144 +426,222 @@ class _GroupDialogPageState extends State<GroupDialogPage> {
         body: SafeArea(
           child: Stack(
             children: [
-              Column(
-                children: [
-                  // Group Cover
-                  SizedBox(
-                    height: 200,
-                    width: double.infinity,
-                    child: group.images.isNotEmpty
-                        ? ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: group.images.length,
-                            itemBuilder: (context, index) {
-                              final image = group.images[index];
-                              return GestureDetector(
-                                key: ValueKey(image.id),
-                                onLongPress:
-                                    widget.currentUserId == group.creatorId
-                                        ? () => _deleteCover(image.id)
-                                        : null,
-                                child: Container(
+              SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // COVER
+                    SizedBox(
+                      height: 200,
+                      width: double.infinity,
+                      child: group.images.isNotEmpty
+                          ? ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: group.images.length,
+                              itemBuilder: (_, index) {
+                                final image = group.images[index];
+                                return Image.network(
+                                  image.url,
                                   width: MediaQuery.of(context).size.width,
-                                  decoration: BoxDecoration(
-                                    image: DecorationImage(
-                                      image: NetworkImage(image.url),
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          )
-                        : GestureDetector(
-                            onTap: widget.currentUserId == group.creatorId
-                                ? _uploadCover
-                                : null,
-                            child: Container(
-                              width: double.infinity,
+                                  fit: BoxFit.cover,
+                                );
+                              },
+                            )
+                          : Container(
                               color: Colors.grey[300],
-                              child: Center(
-                                child: Text(
-                                  group.name[0].toUpperCase(),
-                                  style: const TextStyle(
-                                    fontSize: 48,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                group.name[0].toUpperCase(),
+                                style: const TextStyle(
+                                  fontSize: 48,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
                                 ),
                               ),
                             ),
-                          ),
-                  ),
-
-                  // Group Info
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(group.name,
-                            style: const TextStyle(
-                                fontSize: 22, fontWeight: FontWeight.bold)),
-                        if (group.description != null &&
-                            group.description!.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(group.description!,
-                                style: const TextStyle(
-                                    fontSize: 16, color: Colors.grey)),
-                          ),
-                      ],
                     ),
-                  ),
 
-                  // Tabs
-                  const TabBar(
-                    labelColor: Colors.blue,
-                    unselectedLabelColor: Colors.grey,
-                    indicatorColor: Colors.blue,
-                    tabs: [Tab(text: 'All Members')],
-                  ),
-
-                  // Tab content
-                  Expanded(
-                    child: TabBarView(
-                      children: [
-                        ListView.builder(
-                          itemCount: members.length,
-                          itemBuilder: (context, index) {
-                            final member = members[index];
-                            final isAdmin = member.id == group.creatorId;
-                            return ListTile(
-                              leading: CircleAvatar(
-                                backgroundImage: member.avatarUrl != null
-                                    ? NetworkImage(member.avatarUrl!)
-                                    : null,
-                                backgroundColor: Colors.grey[300],
-                                child: member.avatarUrl == null
-                                    ? Text(member.username[0].toUpperCase(),
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.bold))
-                                    : null,
-                              ),
-                              title: Row(
+                    // GROUP INFO
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            group.name,
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          if (group.description?.isNotEmpty == true)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(member.username),
-                                  if (isAdmin)
-                                    const Padding(
-                                      padding: EdgeInsets.only(left: 6),
-                                      child: Text('(Admin)',
-                                          style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.blue)),
-                                    ),
+                                  Text(
+                                    group.description!,
+                                    maxLines: _isDescriptionExpanded ? null : 3,
+                                    overflow: _isDescriptionExpanded
+                                        ? TextOverflow.visible
+                                        : TextOverflow.ellipsis,
+                                    style: const TextStyle(color: Colors.grey),
+                                  ),
+                                  TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _isDescriptionExpanded =
+                                            !_isDescriptionExpanded;
+                                      });
+                                    },
+                                    style: TextButton.styleFrom(
+                                        padding: EdgeInsets.zero,
+                                        minimumSize: const Size(0, 0)),
+                                    child: Text(_isDescriptionExpanded
+                                        ? 'See Less'
+                                        : 'Show More'),
+                                  ),
                                 ],
                               ),
-                              subtitle: Text(member.email ?? ''),
-                              trailing:
-                                  widget.currentUserId == group.creatorId &&
-                                          !isAdmin
-                                      ? PopupMenuButton<String>(
-                                          onSelected: (value) {
-                                            if (value == 'remove')
-                                              _confirmRemoveMember(member);
-                                          },
-                                          itemBuilder: (_) => const [
-                                            PopupMenuItem(
-                                                value: 'remove',
-                                                child: Text('Remove Member')),
-                                          ],
-                                        )
-                                      : null,
-                            );
-                          },
-                        ),
-                      ],
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+
+                    const SizedBox(height: 12),
+
+                    // MEMBERS HEADER + INVITE
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'All Members',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                                SizedBox(height: 6),
+                                SizedBox(
+                                  width: 80,
+                                  height: 2,
+                                  child: DecoratedBox(
+                                    decoration:
+                                        BoxDecoration(color: Colors.blue),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          ElevatedButton.icon(
+                            onPressed: _showInviteUserDialog,
+                            icon: const Icon(Icons.person_add, size: 18),
+                            label: const Text('Invite'),
+                            style: ElevatedButton.styleFrom(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // SEARCH
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: TextField(
+                        decoration: InputDecoration(
+                          hintText: 'Search members...',
+                          prefixIcon: const Icon(Icons.search),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onChanged: (query) {
+                          setState(() {
+                            _searchQuery = query.toLowerCase();
+                            _filteredMembers = members.where((m) {
+                              return m.username
+                                      .toLowerCase()
+                                      .contains(_searchQuery) ||
+                                  (m.email
+                                          ?.toLowerCase()
+                                          .contains(_searchQuery) ??
+                                      false);
+                            }).toList();
+                          });
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // MEMBERS LIST (NO SCROLL)
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      itemCount: _filteredMembers.length,
+                      itemBuilder: (_, index) {
+                        final member = _filteredMembers[index];
+                        final isAdmin = member.id == group.creatorId;
+
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: CircleAvatar(
+                            backgroundImage: member.avatarUrl != null
+                                ? NetworkImage(member.avatarUrl!)
+                                : null,
+                            child: member.avatarUrl == null
+                                ? Text(member.username[0].toUpperCase())
+                                : null,
+                          ),
+                          title: Row(
+                            children: [
+                              Text(member.username),
+                              if (isAdmin)
+                                const Padding(
+                                  padding: EdgeInsets.only(left: 6),
+                                  child: Text(
+                                    '(Admin)',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.blue,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          subtitle: Text(member.email ?? ''),
+                          trailing: widget.currentUserId == group.creatorId &&
+                                  !isAdmin
+                              ? PopupMenuButton<String>(
+                                  onSelected: (_) =>
+                                      _confirmRemoveMember(member),
+                                  itemBuilder: (_) => const [
+                                    PopupMenuItem(
+                                      value: 'remove',
+                                      child: Text('Remove Member'),
+                                    ),
+                                  ],
+                                )
+                              : null,
+                        );
+                      },
+                    ),
+
+                    const SizedBox(height: 24),
+                  ],
+                ),
               ),
 
               // Back button

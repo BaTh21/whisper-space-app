@@ -686,12 +686,12 @@ class ProfileTab extends StatelessWidget {
               const SizedBox(height: 20),
 
               // Stats
-              Card(
+              const Card(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: EdgeInsets.symmetric(vertical: 16),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: const [
+                    children: [
                       _StatItem(value: '24', label: 'Posts'),
                       _StatItem(value: '128', label: 'Friends'),
                       _StatItem(value: '15', label: 'Notes'),

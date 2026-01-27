@@ -155,6 +155,22 @@ class ChatAPISource {
     return data.map((json)=> GroupMessageModel.fromJson(json)).toList();
   }
 
+  Future<List<UserModel>> searchUsers(String query) async {
+    if(query.length < 2) return [];
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/v1/users/search?q=$query'),
+      headers: await _authHeaders(),
+    );
+
+    if(response.statusCode == 200){
+      final List data = jsonDecode(response.body);
+      return data.map((json) => UserModel.fromJson(json)).toList();
+    } else {
+      throw Exception('Failed to search users');
+    }
+  }
+
   Future<void> inviteUser(int groupId, int userId) async {
     final response = await http.post(
       Uri.parse('$baseUrl/api/v1/groups/$groupId/invites/$userId'),
