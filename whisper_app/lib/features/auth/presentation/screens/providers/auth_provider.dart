@@ -290,6 +290,8 @@ Future<void> getCurrentUser() async {
     print('Error fetching user: $e');
   }
 }
+
+
   
   void _setLoading(bool value) {
     _isLoading = value;
