@@ -11,6 +11,7 @@ from app.core.cloudinary import (
     extract_public_id_from_url
 )
 from app.models.user import User
+from app.schemas.user import AvatarDeleteResponse, AvatarUploadResponse
 
 # Configure Cloudinary on startup
 configure_cloudinary()
@@ -21,7 +22,7 @@ router = APIRouter(tags=["avatars"])
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg"}
 MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
 
-@router.post("/upload")
+@router.post("/upload", response_model=AvatarUploadResponse)
 async def upload_avatar(
     avatar: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
@@ -70,12 +71,14 @@ async def upload_avatar(
         # Update user's avatar URL in database
         current_user.avatar_url = upload_result['secure_url']
         db.commit()
+        db.refresh(current_user)
 
-        return {
-            "avatar_url": upload_result['secure_url'],
-            "message": "Avatar uploaded successfully",
-            "filename": unique_filename
-        }
+        return AvatarUploadResponse(
+            success=True,
+            msg="Avatar uploaded successfully",
+            avatar_url=upload_result['secure_url'],
+            filename=unique_filename
+        )
 
     except HTTPException:
         raise
@@ -85,7 +88,7 @@ async def upload_avatar(
             detail=f"Failed to upload avatar: {str(e)}"
         )
 
-@router.delete("/delete")
+@router.delete("/delete", response_model=AvatarDeleteResponse)
 async def delete_avatar(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -109,8 +112,12 @@ async def delete_avatar(
         # Set avatar_url to null in database
         current_user.avatar_url = None
         db.commit()
+        db.refresh(current_user)
 
-        return {"message": "Avatar deleted successfully"}
+        return AvatarDeleteResponse(
+            success=True,
+            msg="Avatar deleted successfully"
+        )
 
     except HTTPException:
         raise

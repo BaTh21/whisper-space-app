@@ -44,6 +44,28 @@ class User {
       'updated_at': updatedAt.toIso8601String(),
     };
   }
+
+   User copyWith({
+    int? id,
+    String? username,
+    String? email,
+    bool? isVerified,
+    String? avatarUrl,
+    String? bio,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return User(
+      id: id ?? this.id,
+      username: username ?? this.username,
+      email: email ?? this.email,
+      isVerified: isVerified ?? this.isVerified,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      bio: bio ?? this.bio,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
   
   @override
   String toString() {

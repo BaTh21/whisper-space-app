@@ -1,12 +1,17 @@
 // lib/features/auth/presentation/screens/home_screen.dart
+import 'dart:io';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:whisper_space_flutter/core/constants/api_constants.dart';
 import 'package:whisper_space_flutter/features/auth/data/models/diary_model.dart';
+import 'package:whisper_space_flutter/features/chat/chat_screen.dart';
 import 'package:whisper_space_flutter/features/feed/presentation/screens/create_diary_screen.dart';
 import 'package:whisper_space_flutter/features/feed/presentation/screens/edit_diary_full_screen.dart';
-import 'package:whisper_space_flutter/shared/widgets/diary_card.dart';
 import 'package:whisper_space_flutter/features/friend/presentation/screens/friend_screen.dart';
-import 'package:whisper_space_flutter/features/chat/chat_screen.dart';
+import 'package:whisper_space_flutter/shared/widgets/diary_card.dart';
 
 import '../../../../features/feed/data/datasources/feed_api_service.dart';
 import '../../../../features/feed/presentation/providers/feed_provider.dart';
@@ -633,43 +638,378 @@ class NotesTab extends StatelessWidget {
   }
 }
 
-class ProfileTab extends StatelessWidget {
+class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
+
+  @override
+  State<ProfileTab> createState() => _ProfileTabState();
+}
+
+class _ProfileTabState extends State<ProfileTab> {
+  bool _isUploading = false;
+  bool _isEditingUsername = false;
+  late TextEditingController _usernameController;
+  final GlobalKey<FormState> _usernameFormKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    _usernameController = TextEditingController(text: authProvider.currentUser?.username ?? '');
+    // Refresh user data when profile opens
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshUserData();
+    });
+  }
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _refreshUserData() async {
+    if (!mounted) return;
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    await authProvider.getCurrentUser();
+    // Update username controller with current username
+    if (authProvider.currentUser != null) {
+      _usernameController.text = authProvider.currentUser!.username;
+    }
+  }
+
+  Future<void> _pickAndUploadAvatar() async {
+    final picker = ImagePicker();
+    try {
+      final XFile? pickedFile = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+      
+      if (pickedFile != null) {
+        final file = File(pickedFile.path);
+        
+        // Check file size (2MB max)
+        final fileSize = await file.length();
+        if (fileSize > 2 * 1024 * 1024) {
+          _showSnackBar('Image too large. Maximum size is 2MB.', true);
+          return;
+        }
+        
+        setState(() {
+          _isUploading = true;
+        });
+        
+        // Upload to backend
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        final success = await authProvider.uploadAvatar(file);
+        
+        if (success) {
+          // Refresh user data after upload
+          await _refreshUserData();
+          _showSnackBar('Avatar updated successfully!', false);
+        } else {
+          _showSnackBar('Failed to upload avatar', true);
+        }
+      }
+    } catch (e) {
+      _showSnackBar('Error: $e', true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteAvatar() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove Avatar'),
+        content: const Text('Are you sure you want to remove your avatar?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              final success = await authProvider.deleteAvatar();
+              if (success) {
+                await _refreshUserData();
+                _showSnackBar('Avatar removed successfully!', false);
+              } else {
+                _showSnackBar('Failed to remove avatar', true);
+              }
+            },
+            child: const Text(
+              'Remove',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _updateUsername() async {
+    if (!_usernameFormKey.currentState!.validate()) return;
+    
+    final newUsername = _usernameController.text.trim();
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final currentUsername = authProvider.currentUser?.username;
+    
+    if (newUsername == currentUsername) {
+      setState(() => _isEditingUsername = false);
+      return;
+    }
+    
+    try {
+      // Show loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+      
+      // Call API to update username
+      final dio = Dio();
+      final token = await authProvider.storageService.getToken();
+      
+      final response = await dio.put(
+        '${ApiConstants.baseUrl}/api/v1/users/me',
+        data: {'username': newUsername},
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+        ),
+      );
+      
+      Navigator.pop(context); // Close loading dialog
+      
+      if (response.statusCode == 200) {
+        setState(() => _isEditingUsername = false);
+        await _refreshUserData();
+        _showSnackBar('Username updated successfully!', false);
+      } else {
+        _showSnackBar('Failed to update username', true);
+      }
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog
+      _showSnackBar('Error: $e', true);
+    }
+  }
+
+  void _showSnackBar(String message, bool isError) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : Colors.green,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
         final user = authProvider.currentUser;
+        
+        // Get dynamic avatar URL from backend
+        String? avatarUrl = user?.avatarUrl;
+        bool hasAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              // Profile Header
+              // Profile Header with Dynamic Avatar
               Card(
                 elevation: 2,
                 child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
-                      const CircleAvatar(
-                        radius: 50,
-                        backgroundColor: Color(0xFF6C63FF),
-                        child: Icon(
-                          Icons.person,
-                          size: 60,
-                          color: Colors.white,
-                        ),
+                      // Avatar with upload button
+                      Stack(
+                        children: [
+                          Container(
+                            width: 120,
+                            height: 120,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: const Color(0xFF6C63FF),
+                                width: 3,
+                              ),
+                            ),
+                            child: ClipOval(
+                              child: _isUploading
+                                  ? Container(
+                                      color: Colors.grey[200],
+                                      child: const Center(
+                                        child: CircularProgressIndicator(
+                                          color: Color(0xFF6C63FF),
+                                        ),
+                                      ),
+                                    )
+                                  : hasAvatar
+                                      ? Image.network(
+                                          avatarUrl!, // DYNAMIC URL FROM BACKEND
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            // Fallback to default avatar if image fails
+                                            return Container(
+                                              color: const Color(0xFF6C63FF),
+                                              child: const Icon(
+                                                Icons.person,
+                                                size: 60,
+                                                color: Colors.white,
+                                              ),
+                                            );
+                                          },
+                                          loadingBuilder: (context, child, loadingProgress) {
+                                            if (loadingProgress == null) return child;
+                                            return const Center(
+                                              child: CircularProgressIndicator(),
+                                            );
+                                          },
+                                        )
+                                      : Container(
+                                          color: const Color(0xFF6C63FF),
+                                          child: const Icon(
+                                            Icons.person,
+                                            size: 60,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: GestureDetector(
+                              onTap: _pickAndUploadAvatar,
+                              child: Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF6C63FF),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 3,
+                                  ),
+                                ),
+                                child: _isUploading
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.camera_alt,
+                                        size: 20,
+                                        color: Colors.white,
+                                      ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
-                      Text(
-                        user?.username ?? 'User',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      
+                      const SizedBox(height: 20),
+                      
+                      // Username Section
+                      _isEditingUsername
+                          ? Form(
+                              key: _usernameFormKey,
+                              child: Column(
+                                children: [
+                                  TextFormField(
+                                    controller: _usernameController,
+                                    decoration: InputDecoration(
+                                      labelText: 'Username',
+                                      hintText: 'Enter new username',
+                                      border: const OutlineInputBorder(),
+                                      suffixIcon: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(Icons.check, color: Colors.green),
+                                            onPressed: _updateUsername,
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.close, color: Colors.red),
+                                            onPressed: () {
+                                              setState(() {
+                                                _isEditingUsername = false;
+                                                _usernameController.text = user?.username ?? '';
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    validator: (value) {
+                                      if (value == null || value.trim().isEmpty) {
+                                        return 'Username cannot be empty';
+                                      }
+                                      if (value.trim().length < 3) {
+                                        return 'Username must be at least 3 characters';
+                                      }
+                                      if (value.trim().length > 20) {
+                                        return 'Username cannot exceed 20 characters';
+                                      }
+                                      return null;
+                                    },
+                                  ),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    'Username must be 3-20 characters',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  user?.username ?? 'User',
+                                  style: const TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  icon: const Icon(Icons.edit, size: 18),
+                                  onPressed: () {
+                                    setState(() {
+                                      _isEditingUsername = true;
+                                    });
+                                  },
+                                  tooltip: 'Edit username',
+                                ),
+                              ],
+                            ),
+                      
                       const SizedBox(height: 4),
                       Text(
                         user?.email ?? '',
@@ -677,6 +1017,35 @@ class ProfileTab extends StatelessWidget {
                           fontSize: 16,
                           color: Colors.grey,
                         ),
+                      ),
+                      
+                      // Avatar actions
+                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: _pickAndUploadAvatar,
+                            icon: const Icon(Icons.edit),
+                            label: const Text('Change Avatar'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue.shade50,
+                              foregroundColor: Colors.blue,
+                            ),
+                          ),
+                          if (hasAvatar) ...[
+                            const SizedBox(width: 12),
+                            ElevatedButton.icon(
+                              onPressed: _deleteAvatar,
+                              icon: const Icon(Icons.delete, size: 20),
+                              label: const Text('Remove', style: TextStyle(color: Colors.red)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red.shade50,
+                                foregroundColor: Colors.red,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ),
