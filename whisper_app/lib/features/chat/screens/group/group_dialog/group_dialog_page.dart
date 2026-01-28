@@ -601,9 +601,18 @@ class _GroupDialogPageState extends State<GroupDialogPage> {
                             backgroundImage: member.avatarUrl != null
                                 ? NetworkImage(member.avatarUrl!)
                                 : null,
-                            child: member.avatarUrl == null
-                                ? Text(member.username[0].toUpperCase())
-                                : null,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Text(
+                                  member.username[0].toUpperCase(),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                           title: Row(
                             children: [

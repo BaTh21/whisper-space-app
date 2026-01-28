@@ -1,6 +1,7 @@
 // lib/features/auth/presentation/screens/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:whisper_space_flutter/core/services/storage_service.dart';
 import 'package:whisper_space_flutter/features/auth/data/models/diary_model.dart';
 import 'package:whisper_space_flutter/features/feed/presentation/screens/create_diary_screen.dart';
 import 'package:whisper_space_flutter/features/feed/presentation/screens/edit_diary_full_screen.dart';
@@ -12,6 +13,8 @@ import '../../../../features/feed/data/datasources/feed_api_service.dart';
 import '../../../../features/feed/presentation/providers/feed_provider.dart';
 import 'login_screen.dart';
 import 'providers/auth_provider.dart';
+import 'package:whisper_space_flutter/features/inbox/inbox_screen.dart';
+import 'package:whisper_space_flutter/features/inbox/inbox_api_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -23,6 +26,11 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   int? _currentUserId; // Store current user ID
+  late final InboxAPISource inboxApi;
+
+  bool isLoading = true;
+  String? error;
+  int _unreadCount = 0;
 
   final List<Widget> _screens = [
     const FeedTab(),
@@ -44,6 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadCurrentUser();
+    _initServicesAndLoad();
   }
 
   void _loadCurrentUser() {
@@ -59,6 +68,28 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  Future<void> _initServicesAndLoad() async{
+    final storageService = StorageService();
+    await storageService.init();
+
+    inboxApi = InboxAPISource(storageService: storageService);
+
+    _loadData();
+  }
+
+  Future<void> _loadData() async{
+    try{
+      final count = await inboxApi.getUnreadActivityCount();
+      setState(() {
+        _unreadCount = count;
+        isLoading = false;
+      });
+    }catch(e){
+      isLoading = false;
+      error = e.toString();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -66,24 +97,33 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Text(_appBarTitles[_selectedIndex]),
         centerTitle: true,
         elevation: 0,
-        actions: _selectedIndex == 4
-            ? [
-                IconButton(
-                  icon: const Icon(Icons.logout),
-                  tooltip: 'Logout',
-                  onPressed: _showLogoutDialog,
-                ),
-              ]
-            : _selectedIndex == 0
-                ? [
-                    // ADDED: Create button in app bar for Feed tab
-                    IconButton(
-                      icon: const Icon(Icons.add),
-                      tooltip: 'Create New Diary',
-                      onPressed: () => _createNewDiaryFromHome(context),
-                    ),
-                  ]
-                : null,
+        actions: [
+          IconButton(
+            tooltip: 'Inbox',
+            onPressed: () async {
+              await showInboxDialog(context);
+
+              _loadData();
+            },
+            icon: Badge(
+              isLabelVisible: _unreadCount > 0,
+              label: Text(_unreadCount > 99 ? '99+' : '$_unreadCount'),
+              child: const Icon(Icons.mail_outline),
+            ),
+          ),
+          if (_selectedIndex == 4)
+            IconButton(
+              icon: const Icon(Icons.logout),
+              tooltip: 'Logout',
+              onPressed: _showLogoutDialog,
+            )
+          else if (_selectedIndex == 0)
+            IconButton(
+              icon: const Icon(Icons.add),
+              tooltip: 'Create New Diary',
+              onPressed: () => _createNewDiaryFromHome(context),
+            ),
+        ],
       ),
       body: _screens[_selectedIndex],
       bottomNavigationBar: _buildBottomNavBar(),
@@ -96,8 +136,14 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildFloatingActionButton(BuildContext context) {
     return FloatingActionButton(
       onPressed: () => _createNewDiaryFromHome(context),
-      child: const Icon(Icons.add),
-      heroTag: 'home_fab', // Unique tag for FAB
+      heroTag: 'home_fab',
+      child: const Icon(Icons.add), // Unique tag for FAB
+    );
+  }
+
+  Future<void> showInboxDialog(BuildContext context) {
+    return Navigator.of(context).push(
+      _RightSlidePageRoute(widget: InboxDialog(unreadCounts: _unreadCount,)),
     );
   }
 
@@ -591,6 +637,26 @@ class _FeedTabState extends State<FeedTab> {
       );
     }
   }
+}
+
+class _RightSlidePageRoute extends PageRouteBuilder {
+  final Widget widget;
+  _RightSlidePageRoute({required this.widget})
+      : super(
+    pageBuilder: (context, animation, secondaryAnimation) => widget,
+    transitionDuration: const Duration(milliseconds: 300),
+    reverseTransitionDuration: const Duration(milliseconds: 300),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final begin = const Offset(1.0, 0.0); // start from right
+      final end = Offset.zero;
+      final curve = Curves.easeInOut;
+      final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+      return SlideTransition(
+        position: animation.drive(tween),
+        child: child,
+      );
+    },
+  );
 }
 
 class MessagesTab extends StatelessWidget {

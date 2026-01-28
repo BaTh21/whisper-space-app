@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 
-void showTopSnackBar(BuildContext context, String message) {
+void showTopSnackBar(
+    BuildContext context,
+    String message, {
+      Color backgroundColor = Colors.green, // Default color
+    }) {
   final overlay = Overlay.of(context);
   final overlayEntry = OverlayEntry(
     builder: (context) => Positioned(
@@ -12,7 +16,7 @@ void showTopSnackBar(BuildContext context, String message) {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: Colors.green.shade600,
+            color: backgroundColor, // Use the custom color here
             borderRadius: BorderRadius.circular(12),
             boxShadow: const [
               BoxShadow(
@@ -24,7 +28,10 @@ void showTopSnackBar(BuildContext context, String message) {
           ),
           child: Text(
             message,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
       ),
