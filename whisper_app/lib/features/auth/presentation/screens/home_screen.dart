@@ -1,4 +1,3 @@
-// lib/features/auth/presentation/screens/home_screen.dart
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -6,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:whisper_space_flutter/core/constants/api_constants.dart';
+import 'package:whisper_space_flutter/core/providers/theme_provider.dart';
 import 'package:whisper_space_flutter/features/auth/data/models/diary_model.dart';
+import 'package:whisper_space_flutter/features/auth/data/models/user_model.dart';
 import 'package:whisper_space_flutter/features/chat/chat_screen.dart';
 import 'package:whisper_space_flutter/features/feed/presentation/screens/create_diary_screen.dart';
 import 'package:whisper_space_flutter/features/feed/presentation/screens/edit_diary_full_screen.dart';
@@ -27,7 +28,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
-  int? _currentUserId; // Store current user ID
+  int? _currentUserId;
 
   final List<Widget> _screens = [
     const FeedTab(),
@@ -52,7 +53,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _loadCurrentUser() {
-    // Current user ID will be loaded from AuthProvider
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final user = authProvider.currentUser;
@@ -66,35 +66,51 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_appBarTitles[_selectedIndex]),
-        centerTitle: true,
-        elevation: 0,
-        actions: _selectedIndex == 4
-            ? [
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, _) {
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(_appBarTitles[_selectedIndex]),
+            centerTitle: true,
+            elevation: 0,
+            actions: [
+              // Theme toggle button - ALWAYS VISIBLE
+              IconButton(
+                icon: Icon(
+                  themeProvider.isDarkMode
+                      ? Icons.light_mode_outlined
+                      : Icons.dark_mode_outlined,
+                  color: Theme.of(context).iconTheme.color,
+                ),
+                onPressed: () {
+                  themeProvider.toggleTheme(!themeProvider.isDarkMode);
+                },
+                tooltip: themeProvider.isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+              ),
+              // Other action buttons based on selected tab
+              if (_selectedIndex == 0) // Feed tab
+                IconButton(
+                  icon: const Icon(Icons.add),
+                  tooltip: 'Create New Diary',
+                  onPressed: () => _createNewDiaryFromHome(context),
+                ),
+              if (_selectedIndex == 4) // Profile tab
                 IconButton(
                   icon: const Icon(Icons.logout),
                   tooltip: 'Logout',
                   onPressed: _showLogoutDialog,
                 ),
-              ]
-            : _selectedIndex == 0
-                ? [
-                    // ADDED: Create button in app bar for Feed tab
-                    IconButton(
-                      icon: const Icon(Icons.add),
-                      tooltip: 'Create New Diary',
-                      onPressed: () => _createNewDiaryFromHome(context),
-                    ),
-                  ]
-                : null,
-      ),
-      body: _screens[_selectedIndex],
-      bottomNavigationBar: _buildBottomNavBar(),
-      // ADDED: FloatingActionButton that's always visible on Feed tab
-      floatingActionButton:
-          _selectedIndex == 0 ? _buildFloatingActionButton(context) : null,
+            ],
+          ),
+          body: IndexedStack(
+            index: _selectedIndex,
+            children: _screens,
+          ),
+          bottomNavigationBar: _buildBottomNavBar(),
+          floatingActionButton:
+              _selectedIndex == 0 ? _buildFloatingActionButton(context) : null,
+        );
+      },
     );
   }
 
@@ -102,7 +118,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return FloatingActionButton(
       onPressed: () => _createNewDiaryFromHome(context),
       child: const Icon(Icons.add),
-      heroTag: 'home_fab', // Unique tag for FAB
+      heroTag: 'home_fab',
     );
   }
 
@@ -116,10 +132,8 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (context) => CreateDiaryScreen(
           feedApiService: feedApiService,
           onDiaryCreated: (DiaryModel diary) {
-            // Add to provider
             feedProvider.diaries.insert(0, diary);
 
-            // Show success message
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Created: "${diary.title}"'),
@@ -221,7 +235,7 @@ class _FeedTabState extends State<FeedTab> {
   bool _isInitialized = false;
   bool _showCreateButton = true;
   int? _currentUserId;
-  List<Group> _availableGroups = []; // ADDED: Define availableGroups here
+  List<Group> _availableGroups = [];
 
   @override
   void initState() {
@@ -229,7 +243,11 @@ class _FeedTabState extends State<FeedTab> {
     _initialize();
     _scrollController.addListener(_onScroll);
     _loadCurrentUser();
-    _loadUserGroups(); // ADDED: Load groups on init
+    _loadUserGroups();
+
+    // ── IMPORTANT: Start real-time WebSocket listening here ─────────────────
+    final feedProvider = Provider.of<FeedProvider>(context, listen: false);
+    feedProvider.initializeRealTime(); // Connects WS + starts listening for new diaries
   }
 
   void _loadCurrentUser() {
@@ -255,7 +273,7 @@ class _FeedTabState extends State<FeedTab> {
         });
       }
     } catch (e) {
-      print('Failed to load groups: $e');
+      debugPrint('Failed to load groups: $e');
     }
   }
 
@@ -271,7 +289,6 @@ class _FeedTabState extends State<FeedTab> {
   void _onScroll() {
     final currentScroll = _scrollController.position.pixels;
 
-    // Show/hide create button based on scroll position
     if (currentScroll > 100 && _showCreateButton) {
       setState(() => _showCreateButton = false);
     } else if (currentScroll <= 100 && !_showCreateButton) {
@@ -362,7 +379,7 @@ class _FeedTabState extends State<FeedTab> {
                           onFavorite: () =>
                               _handleFavorite(feedProvider, diary.id, isOwner),
                           onComment: (diaryId, content, parentId,
-                                  replyToUserId) => 
+                                  replyToUserId) =>
                               _handleComment(feedProvider, diaryId, content,
                                   parentId, replyToUserId),
                           onEdit: (diaryToEdit) => _handleEditDiary(
@@ -375,10 +392,9 @@ class _FeedTabState extends State<FeedTab> {
                     ),
             ),
 
-            // ADDED: Fixed Create Button at bottom (always visible in FeedTab)
             if (_showCreateButton && feedProvider.diaries.isNotEmpty)
               Positioned(
-                bottom: 80, // Position above the FAB
+                bottom: 80,
                 right: 16,
                 left: 16,
                 child: _buildBottomCreateButton(context, feedProvider),
@@ -412,7 +428,6 @@ class _FeedTabState extends State<FeedTab> {
   void _handleFavorite(
       FeedProvider feedProvider, int diaryId, bool isOwner) async {
     try {
-      // Check if already favorited
       final diary = feedProvider.diaries.firstWhere((d) => d.id == diaryId);
       final isCurrentlyFavorited =
           diary.favoritedUserIds.contains(_currentUserId);
@@ -431,13 +446,12 @@ class _FeedTabState extends State<FeedTab> {
 
   void _handleComment(FeedProvider feedProvider, int diaryId, String content,
       int? parentId, int? replyToUserId) async {
-    // UPDATE SIGNATURE
     try {
       await feedProvider.createComment(
         diaryId: diaryId,
         content: content,
         parentId: parentId,
-        replyToUserId: replyToUserId, // PASS THIS
+        replyToUserId: replyToUserId,
       );
       _showSuccessSnackBar('Comment posted!');
     } catch (e) {
@@ -454,7 +468,6 @@ class _FeedTabState extends State<FeedTab> {
           diary: diary,
           onUpdate: (updatedDiary) async {
             try {
-              // Update the diary with all fields
               final result = await provider.updateDiary(
                 diaryId: updatedDiary.id,
                 title: updatedDiary.title,
@@ -478,36 +491,6 @@ class _FeedTabState extends State<FeedTab> {
     if (result != null && mounted) {
       _showSuccessSnackBar('Diary updated successfully!');
     }
-  }
-
-  Future<String?> _showEditDialog(
-      BuildContext context, DiaryModel diary) async {
-    final controller = TextEditingController(text: diary.content);
-
-    return showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit Diary'),
-        content: TextField(
-          controller: controller,
-          maxLines: 5,
-          decoration: const InputDecoration(
-            hintText: 'Edit your diary content...',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
   }
 
   void _handleDeleteDiary(
@@ -553,13 +536,10 @@ class _FeedTabState extends State<FeedTab> {
         builder: (context) => CreateDiaryScreen(
           feedApiService: feedApiService,
           onDiaryCreated: (DiaryModel diary) {
-            // Add to provider
             feedProvider.diaries.insert(0, diary);
 
-            // Show success message
             _showSuccessSnackBar('Created: "${diary.title}"');
 
-            // Scroll to top to show new diary
             if (_scrollController.hasClients) {
               _scrollController.animateTo(
                 0,
@@ -656,8 +636,7 @@ class _ProfileTabState extends State<ProfileTab> {
     super.initState();
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     _usernameController = TextEditingController(text: authProvider.currentUser?.username ?? '');
-    
-    // Refresh user data when profile opens
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshUserData();
     });
@@ -673,7 +652,6 @@ class _ProfileTabState extends State<ProfileTab> {
     if (!mounted) return;
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     await authProvider.getCurrentUser();
-    // Update username controller with current username
     if (authProvider.currentUser != null) {
       _usernameController.text = authProvider.currentUser!.username;
     }
@@ -688,27 +666,24 @@ class _ProfileTabState extends State<ProfileTab> {
         maxHeight: 1024,
         imageQuality: 85,
       );
-      
+
       if (pickedFile != null) {
         final file = File(pickedFile.path);
-        
-        // Check file size (2MB max)
+
         final fileSize = await file.length();
         if (fileSize > 2 * 1024 * 1024) {
           _showSnackBar('Image too large. Maximum size is 2MB.', true);
           return;
         }
-        
+
         setState(() {
           _isUploading = true;
         });
-        
-        // Upload to backend
+
         final authProvider = Provider.of<AuthProvider>(context, listen: false);
         final success = await authProvider.uploadAvatar(file);
-        
+
         if (success) {
-          // Refresh user data after upload
           await _refreshUserData();
           _showSnackBar('Avatar updated successfully!', false);
         } else {
@@ -728,7 +703,7 @@ class _ProfileTabState extends State<ProfileTab> {
 
   Future<void> _deleteAvatar() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -762,23 +737,22 @@ class _ProfileTabState extends State<ProfileTab> {
 
   Future<void> _updateUsername() async {
     if (!_usernameFormKey.currentState!.validate()) return;
-    
+
     final newUsername = _usernameController.text.trim();
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final currentUser = authProvider.currentUser;
-    
+
     if (currentUser == null) {
       _showSnackBar('Please login first', true);
       return;
     }
-    
+
     if (newUsername == currentUser.username) {
       setState(() => _isEditingUsername = false);
       return;
     }
-    
+
     try {
-      // Show loading
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -786,11 +760,10 @@ class _ProfileTabState extends State<ProfileTab> {
           child: CircularProgressIndicator(),
         ),
       );
-      
-      // Call API to update username
+
       final dio = Dio();
-      final token = await authProvider.storageService.getToken();
-      
+      final token = authProvider.storageService.getToken();
+
       final response = await dio.put(
         '${ApiConstants.baseUrl}/api/v1/users/me',
         data: {'username': newUsername},
@@ -798,9 +771,11 @@ class _ProfileTabState extends State<ProfileTab> {
           headers: {'Authorization': 'Bearer $token'},
         ),
       );
-      
-      Navigator.pop(context); // Close loading dialog
-      
+
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
       if (response.statusCode == 200) {
         setState(() => _isEditingUsername = false);
         await _refreshUserData();
@@ -809,13 +784,16 @@ class _ProfileTabState extends State<ProfileTab> {
         _showSnackBar('Failed to update username', true);
       }
     } catch (e) {
-      Navigator.pop(context); // Close loading dialog
+      if (mounted) {
+        Navigator.pop(context);
+      }
       _showSnackBar('Error: $e', true);
     }
   }
 
   void _showSnackBar(String message, bool isError) {
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -825,41 +803,229 @@ class _ProfileTabState extends State<ProfileTab> {
     );
   }
 
+  Widget _buildMenuItem(IconData icon, String title, VoidCallback onTap) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.primary.withAlpha(26),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(
+          icon,
+          size: 20,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+      ),
+      title: Text(title),
+      trailing: Icon(
+        Icons.chevron_right,
+        color: Theme.of(context).textTheme.bodySmall?.color,
+      ),
+      onTap: onTap,
+    );
+  }
+
+  Widget _buildThemeOption({
+    required BuildContext context,
+    required ThemeProvider themeProvider,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required ThemeMode value,
+    required bool isSelected,
+  }) {
+    return InkWell(
+      onTap: () {
+        themeProvider.setThemeMode(value);
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Theme.of(context).colorScheme.primary.withAlpha(26)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: isSelected
+              ? Border.all(
+                  color: Theme.of(context).colorScheme.primary.withAlpha(77),
+                  width: 1,
+                )
+              : null,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: isSelected
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).iconTheme.color?.withAlpha(153),
+              size: 22,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                      color: isSelected
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).textTheme.bodySmall?.color?.withAlpha(179),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              Icon(
+                Icons.check_circle_rounded,
+                color: Theme.of(context).colorScheme.primary,
+                size: 20,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Consumer<AuthProvider>(
-      builder: (context, authProvider, child) {
+    return Consumer2<AuthProvider, ThemeProvider>(
+      builder: (context, authProvider, themeProvider, child) {
         final user = authProvider.currentUser;
-        
+
         if (user == null) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 20),
-                Text('Loading profile...'),
-              ],
-            ),
-          );
+          return _buildLoadingProfile();
         }
-        
-        // Get dynamic avatar URL from backend
-        final avatarUrl = user.avatarUrl;
-        final hasAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              // Profile Header with Dynamic Avatar
+              const SizedBox(height: 8),
+
+              // Theme Settings Card
               Card(
-                elevation: 2,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(
+                    color: Theme.of(context).dividerColor.withAlpha(26),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
+                    children: [
+                      // Theme Toggle
+                      ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                        leading: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary.withAlpha(26),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            themeProvider.isDarkMode
+                                ? Icons.dark_mode
+                                : Icons.light_mode,
+                            color: Theme.of(context).colorScheme.primary,
+                            size: 22,
+                          ),
+                        ),
+                        title: const Text(
+                          'Theme',
+                          style: TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                        subtitle: Text(
+                          themeProvider.isDarkMode ? 'Dark Mode' : 'Light Mode',
+                          style: TextStyle(
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          ),
+                        ),
+                        trailing: Switch(
+                          value: themeProvider.isDarkMode,
+                          onChanged: (value) {
+                            themeProvider.toggleTheme(value);
+                          },
+                          activeThumbColor: Theme.of(context).colorScheme.primary,
+                          activeTrackColor: Theme.of(context).colorScheme.primaryContainer,
+                          inactiveThumbColor: Theme.of(context).colorScheme.onSurface.withAlpha(77),
+                          inactiveTrackColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        ),
+                      ),
+
+                      // Theme Mode Options
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Column(
+                          children: [
+                            _buildThemeOption(
+                              context: context,
+                              themeProvider: themeProvider,
+                              icon: Icons.brightness_auto_rounded,
+                              title: 'System Default',
+                              subtitle: 'Follow device settings',
+                              value: ThemeMode.system,
+                              isSelected: themeProvider.themeMode == ThemeMode.system,
+                            ),
+                            _buildThemeOption(
+                              context: context,
+                              themeProvider: themeProvider,
+                              icon: Icons.light_mode_rounded,
+                              title: 'Light Mode',
+                              subtitle: 'Always light appearance',
+                              value: ThemeMode.light,
+                              isSelected: themeProvider.themeMode == ThemeMode.light,
+                            ),
+                            _buildThemeOption(
+                              context: context,
+                              themeProvider: themeProvider,
+                              icon: Icons.dark_mode_rounded,
+                              title: 'Dark Mode',
+                              subtitle: 'Always dark appearance',
+                              value: ThemeMode.dark,
+                              isSelected: themeProvider.themeMode == ThemeMode.dark,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Profile Header Card
+              Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(
+                    color: Theme.of(context).dividerColor.withAlpha(26),
+                  ),
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
-                      // Avatar with upload button
+                      // Avatar with upload
                       Stack(
                         children: [
                           Container(
@@ -868,50 +1034,12 @@ class _ProfileTabState extends State<ProfileTab> {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: const Color(0xFF6C63FF),
+                                color: Theme.of(context).colorScheme.primary,
                                 width: 3,
                               ),
                             ),
                             child: ClipOval(
-                              child: _isUploading
-                                  ? Container(
-                                      color: Colors.grey[200],
-                                      child: const Center(
-                                        child: CircularProgressIndicator(
-                                          color: Color(0xFF6C63FF),
-                                        ),
-                                      ),
-                                    )
-                                  : hasAvatar
-                                      ? Image.network(
-                                          avatarUrl,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (context, error, stackTrace) {
-                                            print('❌ Avatar load error: $error');
-                                            return Container(
-                                              color: const Color(0xFF6C63FF),
-                                              child: const Icon(
-                                                Icons.person,
-                                                size: 60,
-                                                color: Colors.white,
-                                              ),
-                                            );
-                                          },
-                                          loadingBuilder: (context, child, loadingProgress) {
-                                            if (loadingProgress == null) return child;
-                                            return const Center(
-                                              child: CircularProgressIndicator(),
-                                            );
-                                          },
-                                        )
-                                      : Container(
-                                          color: const Color(0xFF6C63FF),
-                                          child: const Icon(
-                                            Icons.person,
-                                            size: 60,
-                                            color: Colors.white,
-                                          ),
-                                        ),
+                              child: _buildAvatar(user),
                             ),
                           ),
                           Positioned(
@@ -922,20 +1050,20 @@ class _ProfileTabState extends State<ProfileTab> {
                               child: Container(
                                 padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF6C63FF),
+                                  color: Theme.of(context).colorScheme.primary,
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: Colors.white,
+                                    color: Theme.of(context).scaffoldBackgroundColor,
                                     width: 3,
                                   ),
                                 ),
                                 child: _isUploading
                                     ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
+                                        width: 18,
+                                        height: 18,
                                         child: CircularProgressIndicator(
                                           strokeWidth: 2,
-                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                          color: Colors.white,
                                         ),
                                       )
                                     : const Icon(
@@ -948,157 +1076,124 @@ class _ProfileTabState extends State<ProfileTab> {
                           ),
                         ],
                       ),
-                      
+
                       const SizedBox(height: 20),
-                      
-                      // Username Section
+
+                      // Username
                       _isEditingUsername
-                          ? Form(
-                              key: _usernameFormKey,
-                              child: Column(
-                                children: [
-                                  TextFormField(
-                                    controller: _usernameController,
-                                    decoration: InputDecoration(
-                                      labelText: 'Username',
-                                      hintText: 'Enter new username',
-                                      border: const OutlineInputBorder(),
-                                      suffixIcon: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          IconButton(
-                                            icon: const Icon(Icons.check, color: Colors.green),
-                                            onPressed: _updateUsername,
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(Icons.close, color: Colors.red),
-                                            onPressed: () {
-                                              setState(() {
-                                                _isEditingUsername = false;
-                                                _usernameController.text = user.username;
-                                              });
-                                            },
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    validator: (value) {
-                                      if (value == null || value.trim().isEmpty) {
-                                        return 'Username cannot be empty';
-                                      }
-                                      if (value.trim().length < 3) {
-                                        return 'Username must be at least 3 characters';
-                                      }
-                                      if (value.trim().length > 20) {
-                                        return 'Username cannot exceed 20 characters';
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                                  const SizedBox(height: 8),
-                                  const Text(
-                                    'Username must be 3-20 characters',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
+                          ? _buildUsernameEditForm(context, user, authProvider)
                           : Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Text(
                                   user.username,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 24,
                                     fontWeight: FontWeight.bold,
+                                    color: Theme.of(context).colorScheme.onSurface,
                                   ),
                                 ),
                                 const SizedBox(width: 8),
                                 IconButton(
-                                  icon: const Icon(Icons.edit, size: 18),
+                                  icon: Icon(
+                                    Icons.edit,
+                                    size: 18,
+                                    color: Theme.of(context).colorScheme.primary,
+                                  ),
                                   onPressed: () {
                                     setState(() {
                                       _isEditingUsername = true;
                                     });
                                   },
-                                  tooltip: 'Edit username',
                                 ),
                               ],
                             ),
-                      
-                      const SizedBox(height: 4),
+
+                      // Email
                       Text(
                         user.email,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
-                          color: Colors.grey,
+                          color: Theme.of(context).textTheme.bodySmall?.color,
                         ),
                       ),
-                      
-                      // Bio if available
-                      if (user.bio != null && user.bio!.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: Text(
-                            user.bio!,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey,
-                              fontStyle: FontStyle.italic,
-                            ),
+
+                      // Verification Badge
+                      if (user.isVerified)
+                        Container(
+                          margin: const EdgeInsets.only(top: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withAlpha(26),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.verified,
+                                size: 14,
+                                color: const Color(0xFF10B981),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Verified',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: const Color(0xFF10B981),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      
-                      // Account verification status
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              user.isVerified ? Icons.verified : Icons.verified_outlined,
-                              size: 16,
-                              color: user.isVerified ? Colors.green : Colors.grey,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              user.isVerified ? 'Verified' : 'Not Verified',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: user.isVerified ? Colors.green : Colors.grey,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      
-                      // Avatar actions
+
+                      // Avatar Actions
                       const SizedBox(height: 20),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           ElevatedButton.icon(
                             onPressed: _pickAndUploadAvatar,
-                            icon: const Icon(Icons.edit),
-                            label: const Text('Change Avatar'),
+                            icon: Icon(
+                              Icons.edit,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                            label: Text(
+                              'Change Avatar',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue.shade50,
-                              foregroundColor: Colors.blue,
+                              backgroundColor: Theme.of(context).colorScheme.primary.withAlpha(26),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
                           ),
-                          if (hasAvatar) ...[
+                          if (user.avatarUrl != null && user.avatarUrl!.isNotEmpty) ...[
                             const SizedBox(width: 12),
                             ElevatedButton.icon(
                               onPressed: _deleteAvatar,
-                              icon: const Icon(Icons.delete, size: 20),
-                              label: const Text('Remove', style: TextStyle(color: Colors.red)),
+                              icon: Icon(
+                                Icons.delete,
+                                size: 20,
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                              label: Text(
+                                'Remove',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              ),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red.shade50,
-                                foregroundColor: Colors.red,
+                                backgroundColor: Theme.of(context).colorScheme.error.withAlpha(26),
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
                             ),
                           ],
@@ -1109,59 +1204,119 @@ class _ProfileTabState extends State<ProfileTab> {
                 ),
               ),
 
-              const SizedBox(height: 20),
-
               // Account Info Card
+              const SizedBox(height: 20),
               Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(
+                    color: Theme.of(context).dividerColor.withAlpha(26),
+                  ),
+                ),
                 child: Column(
                   children: [
                     ListTile(
-                      leading: const Icon(Icons.calendar_today, color: Color(0xFF6C63FF)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary.withAlpha(26),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          Icons.calendar_today,
+                          size: 20,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
                       title: const Text('Member Since'),
                       subtitle: Text(
                         '${user.createdAt.day}/${user.createdAt.month}/${user.createdAt.year}',
-                        style: const TextStyle(fontSize: 14),
+                        style: TextStyle(
+                          color: Theme.of(context).textTheme.bodySmall?.color,
+                        ),
                       ),
                     ),
-                    const Divider(height: 0),
+                    Divider(
+                      height: 0,
+                      color: Theme.of(context).dividerColor.withAlpha(26),
+                      indent: 20,
+                      endIndent: 20,
+                    ),
                     ListTile(
-                      leading: const Icon(Icons.update, color: Color(0xFF6C63FF)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary.withAlpha(26),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          Icons.update,
+                          size: 20,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
                       title: const Text('Last Updated'),
                       subtitle: Text(
                         '${user.updatedAt.day}/${user.updatedAt.month}/${user.updatedAt.year}',
-                        style: const TextStyle(fontSize: 14),
+                        style: TextStyle(
+                          color: Theme.of(context).textTheme.bodySmall?.color,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
 
+              // Settings Menu
               const SizedBox(height: 20),
-
-              // Menu Items
               Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(
+                    color: Theme.of(context).dividerColor.withAlpha(26),
+                  ),
+                ),
                 child: Column(
                   children: [
                     _buildMenuItem(
-                      Icons.settings,
+                      Icons.settings_outlined,
                       'Settings',
                       () {},
                     ),
-                    const Divider(height: 0),
+                    Divider(
+                      height: 0,
+                      color: Theme.of(context).dividerColor.withAlpha(26),
+                      indent: 20,
+                      endIndent: 20,
+                    ),
                     _buildMenuItem(
-                      Icons.notifications,
+                      Icons.notifications_outlined,
                       'Notifications',
                       () {},
                     ),
-                    const Divider(height: 0),
+                    Divider(
+                      height: 0,
+                      color: Theme.of(context).dividerColor.withAlpha(26),
+                      indent: 20,
+                      endIndent: 20,
+                    ),
                     _buildMenuItem(
-                      Icons.privacy_tip,
+                      Icons.privacy_tip_outlined,
                       'Privacy',
                       () {},
                     ),
-                    const Divider(height: 0),
+                    Divider(
+                      height: 0,
+                      color: Theme.of(context).dividerColor.withAlpha(26),
+                      indent: 20,
+                      endIndent: 20,
+                    ),
                     _buildMenuItem(
-                      Icons.help,
+                      Icons.help_outline,
                       'Help & Support',
                       () {},
                     ),
@@ -1169,25 +1324,37 @@ class _ProfileTabState extends State<ProfileTab> {
                 ),
               ),
 
-              const SizedBox(height: 20),
-
               // Logout Button
+              const SizedBox(height: 30),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () {
-                    final homeState =
-                        context.findAncestorStateOfType<_HomeScreenState>();
+                    final homeState = context.findAncestorStateOfType<_HomeScreenState>();
                     homeState?._showLogoutDialog();
                   },
-                  icon: const Icon(Icons.logout),
-                  label: const Text('Logout'),
+                  icon: Icon(
+                    Icons.logout,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                  label: Text(
+                    'Logout',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFFEBEE),
-                    foregroundColor: Colors.red,
+                    backgroundColor: Theme.of(context).colorScheme.error.withAlpha(26),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),
+              const SizedBox(height: 20),
             ],
           ),
         );
@@ -1195,12 +1362,129 @@ class _ProfileTabState extends State<ProfileTab> {
     );
   }
 
-  Widget _buildMenuItem(IconData icon, String title, VoidCallback onTap) {
-    return ListTile(
-      leading: Icon(icon, color: const Color(0xFF6C63FF)),
-      title: Text(title),
-      trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-      onTap: onTap,
+  Widget _buildAvatar(User user) {
+    if (_isUploading) {
+      return Container(
+        color: Colors.grey[200],
+        child: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (user.avatarUrl != null && user.avatarUrl!.isNotEmpty) {
+      return Image.network(
+        user.avatarUrl!,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            color: const Color(0xFF7C3AED),
+            child: const Icon(
+              Icons.person,
+              size: 60,
+              color: Colors.white,
+            ),
+          );
+        },
+      );
+    }
+
+    return Container(
+      color: const Color(0xFF7C3AED),
+      child: const Icon(
+        Icons.person,
+        size: 60,
+        color: Colors.white,
+      ),
+    );
+  }
+
+  Widget _buildUsernameEditForm(BuildContext context, User user, AuthProvider authProvider) {
+    return Form(
+      key: _usernameFormKey,
+      child: Column(
+        children: [
+          TextFormField(
+            controller: _usernameController,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+            decoration: InputDecoration(
+              labelText: 'Username',
+              hintText: 'Enter new username',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              filled: true,
+              fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.check, color: Theme.of(context).colorScheme.primary),
+                    onPressed: _updateUsername,
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close, color: Theme.of(context).colorScheme.error),
+                    onPressed: () {
+                      setState(() {
+                        _isEditingUsername = false;
+                        _usernameController.text = user.username;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Username cannot be empty';
+              }
+              if (value.trim().length < 3) {
+                return 'Username must be at least 3 characters';
+              }
+              if (value.trim().length > 20) {
+                return 'Username cannot exceed 20 characters';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Username must be 3-20 characters',
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).textTheme.bodySmall?.color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingProfile() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 60,
+            height: 60,
+            child: CircularProgressIndicator(
+              strokeWidth: 3,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Loading profile...',
+            style: TextStyle(
+              fontSize: 16,
+              color: Theme.of(context).textTheme.bodyMedium?.color,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
