@@ -1,20 +1,19 @@
-// lib/shared/widgets/theme/app_theme.dart
 import 'package:flutter/material.dart';
 
 class AppTheme {
   static ThemeData lightTheme = ThemeData(
-    useMaterial3: true,
-    brightness: Brightness.light,
     primaryColor: const Color(0xFF6C63FF),
     primaryColorDark: const Color(0xFF5A52D5),
     primaryColorLight: const Color(0xFF8B85FF),
     colorScheme: const ColorScheme.light(
       primary: Color(0xFF6C63FF),
       secondary: Color(0xFFFF6584),
-      surface: Color(0xFFF8F9FA),
-      onSurface: Color(0xFF212529),
+      background: Color(0xFFF8F9FA),
+      surface: Colors.white,
       onPrimary: Colors.white,
       onSecondary: Colors.white,
+      onBackground: Color(0xFF212529),
+      onSurface: Color(0xFF212529),
       error: Color(0xFFDC3545),
     ),
     scaffoldBackgroundColor: const Color(0xFFF8F9FA),
@@ -91,35 +90,21 @@ class AppTheme {
         ),
       ),
     ),
-    // Fixed: Removed const from CardThemeData
-    cardTheme: CardThemeData(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      color: Colors.white,
-      surfaceTintColor: Colors.white,
-    ),
-    dividerTheme: const DividerThemeData(
-      color: Color(0xFFE9ECEF),
-      thickness: 1,
-      space: 0,
-    ),
   );
   
   static ThemeData darkTheme = ThemeData(
-    useMaterial3: true,
-    brightness: Brightness.dark,
     primaryColor: const Color(0xFF6C63FF),
     primaryColorDark: const Color(0xFF5A52D5),
     primaryColorLight: const Color(0xFF8B85FF),
     colorScheme: const ColorScheme.dark(
       primary: Color(0xFF6C63FF),
       secondary: Color(0xFFFF6584),
-      surface: Color(0xFF121212),
-      onSurface: Colors.white,
+      background: Color(0xFF121212),
+      surface: Color(0xFF1E1E1E),
       onPrimary: Colors.white,
       onSecondary: Colors.white,
+      onBackground: Colors.white,
+      onSurface: Colors.white,
       error: Color(0xFFDC3545),
     ),
     scaffoldBackgroundColor: const Color(0xFF121212),
@@ -195,19 +180,6 @@ class AppTheme {
           fontWeight: FontWeight.w600,
         ),
       ),
-    ),
-    cardTheme: CardThemeData(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      color: const Color(0xFF1E1E1E),
-      surfaceTintColor: const Color(0xFF1E1E1E),
-    ),
-    dividerTheme: const DividerThemeData(
-      color: Color(0xFF2D2D2D),
-      thickness: 1,
-      space: 0,
     ),
   );
 }

@@ -1,8 +1,9 @@
+// lib/shared/widgets/media_gallery.dart
 import 'dart:async';
-
-import 'package:chewie/chewie.dart';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
+import 'package:chewie/chewie.dart';
 
 class MediaGallery extends StatefulWidget {
   final List<String> images;
@@ -215,7 +216,7 @@ class _MediaGalleryState extends State<MediaGallery> {
       child: ClipRRect(
         borderRadius: borderRadius,
         child: Container(
-          color: Theme.of(context).colorScheme.surfaceVariant,
+          color: Colors.grey[200],
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -250,18 +251,19 @@ class _MediaGalleryState extends State<MediaGallery> {
     return Stack(
       fit: StackFit.expand,
       children: [
+        // Thumbnail or placeholder
         if (item.thumbnailUrl != null && item.thumbnailUrl!.isNotEmpty)
           Image.network(
             item.thumbnailUrl!,
             fit: BoxFit.cover,
             errorBuilder: (context, error, stackTrace) {
               return Container(
-                color: Theme.of(context).colorScheme.surfaceVariant,
-                child: Center(
+                color: Colors.grey[300],
+                child: const Center(
                   child: Icon(
                     Icons.videocam,
                     size: 32,
-                    color: Theme.of(context).iconTheme.color?.withOpacity(0.3),
+                    color: Colors.grey,
                   ),
                 ),
               );
@@ -269,12 +271,12 @@ class _MediaGalleryState extends State<MediaGallery> {
           )
         else
           Container(
-            color: Theme.of(context).colorScheme.surfaceVariant,
-            child: Center(
+            color: Colors.grey[300],
+            child: const Center(
               child: Icon(
                 Icons.videocam,
                 size: 32,
-                color: Theme.of(context).iconTheme.color?.withOpacity(0.3),
+                color: Colors.grey,
               ),
             ),
           ),
@@ -288,12 +290,12 @@ class _MediaGalleryState extends State<MediaGallery> {
       fit: BoxFit.cover,
       errorBuilder: (context, error, stackTrace) {
         return Container(
-          color: Theme.of(context).colorScheme.surfaceVariant,
-          child: Center(
+          color: Colors.grey[200],
+          child: const Center(
             child: Icon(
               Icons.broken_image,
               size: 32,
-              color: Theme.of(context).iconTheme.color?.withOpacity(0.3),
+              color: Colors.grey,
             ),
           ),
         );
@@ -352,6 +354,7 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
   }
 
   Future<void> _initializeVideoPlayer(String videoUrl) async {
+    // Dispose previous player
     _chewieController?.dispose();
     _videoPlayerController?.dispose();
 
@@ -365,8 +368,8 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
         looping: false,
         showControls: true,
         materialProgressColors: ChewieProgressColors(
-          playedColor: const Color(0xFF7C3AED),
-          handleColor: const Color(0xFF7C3AED),
+          playedColor: Colors.red,
+          handleColor: Colors.red,
           backgroundColor: Colors.grey[300]!,
           bufferedColor: Colors.grey[200]!,
         ),
@@ -377,7 +380,7 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
           ),
         ),
         autoInitialize: true,
-        allowFullScreen: false,
+        allowFullScreen: false, // We're already full screen
         allowMuting: true,
         showControlsOnInitialize: true,
       );
@@ -386,10 +389,7 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to load video: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Failed to load video: $e')),
         );
       }
     }

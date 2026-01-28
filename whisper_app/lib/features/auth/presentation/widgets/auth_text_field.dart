@@ -25,7 +25,7 @@ class AuthTextField extends StatelessWidget {
     this.onChanged,
     this.maxLines = 1,
     this.readOnly = false,
-    this.onTap,
+    this.onTap, required,
   });
   
   @override
@@ -35,10 +35,9 @@ class AuthTextField extends StatelessWidget {
       children: [
         Text(
           label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[700],
           ),
         ),
         const SizedBox(height: 8),
@@ -51,51 +50,30 @@ class AuthTextField extends StatelessWidget {
           maxLines: maxLines,
           readOnly: readOnly,
           onTap: onTap,
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-            fontSize: 16,
-          ),
           decoration: InputDecoration(
             hintText: hintText,
-            hintStyle: TextStyle(
-              color: Theme.of(context).hintColor,
-            ),
-            prefixIcon: prefixIcon != null 
-                ? Icon(
-                    prefixIcon,
-                    color: Theme.of(context).iconTheme.color,
-                  )
-                : null,
+            prefixIcon: prefixIcon != null ? Icon(prefixIcon) : null,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: Theme.of(context).dividerColor,
-              ),
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey[300]!),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: Theme.of(context).dividerColor,
-              ),
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey[300]!),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: Theme.of(context).colorScheme.primary,
-                width: 2,
-              ),
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Theme.of(context).primaryColor),
             ),
             errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: Theme.of(context).colorScheme.error,
-              ),
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Colors.red),
             ),
             filled: true,
-            fillColor: Theme.of(context).inputDecorationTheme.fillColor,
+            fillColor: Colors.grey[50],
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
-              vertical: 16,
+              vertical: 14,
             ),
           ),
         ),
