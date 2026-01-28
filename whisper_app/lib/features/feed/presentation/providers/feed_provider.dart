@@ -2,92 +2,109 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:whisper_space_flutter/core/services/websocket_manager.dart';
 import 'package:whisper_space_flutter/features/auth/data/models/diary_model.dart';
 import 'package:whisper_space_flutter/features/feed/data/datasources/feed_api_service.dart';
 
 class FeedProvider with ChangeNotifier {
   final FeedApiService feedApiService;
-  
+
   List<DiaryModel> _diaries = [];
   List<DiaryModel> _myDiaries = [];
   List<DiaryModel> _favoriteDiaries = [];
   bool _isLoading = false;
   String? _error;
   int _currentUserId = 0;
-  
-  // WebSocket related properties
+
   bool _isWsConnected = false;
-  bool _isWsConnecting = false;
-  
+  StreamSubscription<DiaryModel>? _diarySubscription;
+
   List<DiaryModel> get diaries => _diaries;
   List<DiaryModel> get myDiaries => _myDiaries;
   List<DiaryModel> get favoriteDiaries => _favoriteDiaries;
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isWsConnected => _isWsConnected;
-  bool get isWsConnecting => _isWsConnecting;
 
-  FeedProvider({required this.feedApiService});
+  FeedProvider({required this.feedApiService}) {
+    _initWebSocketListener();
+  }
+
+ void _initWebSocketListener() {
+  _diarySubscription = WebSocketManager().diaryUpdates.listen((newDiary) {
+    print('WS: New diary received → ID: ${newDiary.id}');
+
+    // CRITICAL FIX: Skip if it's the current user's own diary (already added optimistically)
+    if (newDiary.author.id == _currentUserId) {
+      print('Ignoring own diary from WS (already added locally)');
+      return;
+    }
+
+    // Prevent any other duplicates
+    if (!_diaries.any((d) => d.id == newDiary.id)) {
+      _diaries.insert(0, newDiary);
+      notifyListeners();
+    }
+
+    // Optional: add to myDiaries only if not own (but usually own is already there)
+    if (!_myDiaries.any((d) => d.id == newDiary.id)) {
+      _myDiaries.insert(0, newDiary);
+      notifyListeners();
+    }
+  });
+}
 
   void setCurrentUserId(int userId) {
     _currentUserId = userId;
-  }
-
-  // ============ WEB SOCKET METHODS ============
-  Future<void> reconnectWebSocket() async {
-    // For now, just set connected state
-    _isWsConnected = true;
-    _isWsConnecting = false;
-    notifyListeners();
-    
-    // TODO: Implement actual WebSocket reconnection
-    // This is a placeholder for future WebSocket implementation
-  }
-
-  void _initWebSocket() {
-    // TODO: Initialize WebSocket connection
-    // This is a placeholder for future WebSocket implementation
-    _isWsConnected = true;
     notifyListeners();
   }
 
-  // ============ DIARY CRUD OPERATIONS ============
+  void initializeRealTime() {
+    WebSocketManager().connect();
+    _isWsConnected = WebSocketManager().isConnected;
+    notifyListeners();
+  }
+
   Future<DiaryModel> createDiary({
-    required String title,
-    required String content,
-    String shareType = 'private',
-    List<int>? groupIds,
-    List<String>? imageUrls,
-    List<String>? videoUrls,
-  }) async {
-    try {
-      _isLoading = true;
-      notifyListeners();
-      
-      final newDiary = await feedApiService.createDiary(
-        title: title,
-        content: content,
-        shareType: shareType,
-        groupIds: groupIds,
-        imageUrls: imageUrls,
-        videoUrls: videoUrls,
-      );
-      
+  required String title,
+  required String content,
+  String shareType = 'personal',
+  List<int>? groupIds,
+  List<String>? imageUrls,
+  List<String>? videoUrls,
+}) async {
+  try {
+    _isLoading = true;
+    notifyListeners();
+
+    final newDiary = await feedApiService.createDiary(
+      title: title,
+      content: content,
+      shareType: shareType,
+      groupIds: groupIds,
+      imageUrls: imageUrls,
+      videoUrls: videoUrls,
+    );
+
+    // Only add if not already present (extra safety)
+    if (!_diaries.any((d) => d.id == newDiary.id)) {
       _diaries.insert(0, newDiary);
-      _myDiaries.insert(0, newDiary);
-      
-      _isLoading = false;
-      notifyListeners();
-      
-      return newDiary;
-      
-    } catch (e) {
-      _isLoading = false;
-      _error = 'Failed to create diary: $e';
-      notifyListeners();
-      rethrow;
     }
+    if (!_myDiaries.any((d) => d.id == newDiary.id)) {
+      _myDiaries.insert(0, newDiary);
+    }
+
+    _isLoading = false;
+    notifyListeners();
+
+    return newDiary;
+  } catch (e) {
+    _isLoading = false;
+    _error = 'Failed to create diary: $e';
+    notifyListeners();
+    rethrow;
   }
+}
 
   Future<DiaryModel> updateDiary({
     required int diaryId,
@@ -362,27 +379,29 @@ class FeedProvider with ChangeNotifier {
   }
 
   Future<void> refreshFeed() async {
-    await loadFeed(refresh: true);
-  }
-
-  Future<void> loadMyDiaries() async {
     try {
       _isLoading = true;
       _error = null;
       notifyListeners();
-      
-      _myDiaries = await feedApiService.getMyFeed();
-      
+
+      final newDiaries = await feedApiService.getFeed();
+      _diaries = newDiaries;
+
       _isLoading = false;
       notifyListeners();
-      
     } catch (e) {
       _isLoading = false;
-      _error = 'Failed to load my diaries: $e';
+      _error = 'Failed to refresh feed: $e';
       notifyListeners();
     }
   }
 
+  @override
+  void dispose() {
+    _diarySubscription?.cancel();
+    super.dispose();
+  }
+}
   // ============ HELPER METHODS ============
   DiaryModel _createUpdatedDiary(
     DiaryModel diary, {
@@ -469,9 +488,3 @@ class FeedProvider with ChangeNotifier {
     }
     return updatedComments;
   }
-
-  void clearError() {
-    _error = null;
-    notifyListeners();
-  }
-}

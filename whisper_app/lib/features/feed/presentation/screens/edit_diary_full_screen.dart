@@ -9,7 +9,6 @@ class EditDiaryFullScreen extends StatefulWidget {
   final DiaryModel diary;
   final Function(DiaryModel) onUpdate;
   final List<Group> availableGroups;
-  
   final FeedApiService? feedApiService;
   final Function(int)? onDelete;
 
@@ -74,7 +73,7 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context); // Close confirmation dialog
+              Navigator.pop(context);
               
               if (mounted) {
                 setState(() => _isDeleting = true);
@@ -84,16 +83,9 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                 await widget.feedApiService!.deleteDiary(widget.diary.id);
                 
                 if (mounted) {
-                  // ✅ CRITICAL FIX: Call onDelete FIRST, then close the screen
                   widget.onDelete!(widget.diary.id);
-                  
-                  // Show success message
                   _showSnackBar('Diary deleted successfully!', false);
-                  
-                  // Wait a moment for the snackbar to show, then close
                   await Future.delayed(const Duration(milliseconds: 1500));
-                  
-                  // Close the edit screen and return null to indicate deletion
                   Navigator.pop(context, null);
                 }
               } catch (e) {
@@ -103,9 +95,9 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                 }
               }
             },
-            child: const Text(
+            child: Text(
               'Delete',
-              style: TextStyle(color: Colors.red),
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ),
         ],
@@ -140,9 +132,9 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                         Navigator.pop(context);
                         Navigator.pop(context);
                       },
-                      child: const Text(
+                      child: Text(
                         'Discard',
-                        style: TextStyle(color: Colors.red),
+                        style: TextStyle(color: Theme.of(context).colorScheme.error),
                       ),
                     ),
                   ],
@@ -156,7 +148,7 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
         actions: [
           if (widget.feedApiService != null && widget.onDelete != null)
             IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              icon: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
               onPressed: (_isLoading || _isDeleting) ? null : _deleteDiary,
               tooltip: 'Delete Diary',
             ),
@@ -171,12 +163,12 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
               children: [
                 TextFormField(
                   controller: _titleController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Title *',
                     hintText: 'Give your diary a title',
                     border: OutlineInputBorder(),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                   ),
                   maxLength: 255,
                 ),
@@ -185,13 +177,13 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                 
                 TextFormField(
                   controller: _contentController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Content *',
                     hintText: 'Write your thoughts here...',
                     border: OutlineInputBorder(),
                     alignLabelWithHint: true,
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                   ),
                   maxLines: 8,
                   minLines: 4,
@@ -202,46 +194,50 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Privacy:',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Container(
                       decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
+                        border: Border.all(color: Theme.of(context).colorScheme.outline),
                         borderRadius: BorderRadius.circular(8),
-                        color: Colors.grey.shade50,
+                        color: Theme.of(context).colorScheme.surfaceContainerLowest,
                       ),
                       child: Column(
                         children: [
                           _buildPrivacyOption(
                             icon: Icons.lock,
-                            iconColor: Colors.red,
+                            iconColor: Theme.of(context).colorScheme.error,
                             title: 'Private',
                             subtitle: 'Only you can see this',
                             value: 'personal',
                           ),
-                          Divider(height: 1, color: Colors.grey.shade300),
+                          Divider(height: 1, color: Theme.of(context).colorScheme.outline),
                           _buildPrivacyOption(
                             icon: Icons.public,
-                            iconColor: Colors.green,
+                            iconColor: Theme.of(context).colorScheme.secondary,
                             title: 'Public',
                             subtitle: 'Everyone can see this',
                             value: 'public',
                           ),
-                          Divider(height: 1, color: Colors.grey.shade300),
+                          Divider(height: 1, color: Theme.of(context).colorScheme.outline),
                           _buildPrivacyOption(
                             icon: Icons.people,
-                            iconColor: Colors.blue,
+                            iconColor: Theme.of(context).colorScheme.primary,
                             title: 'Friends Only',
                             subtitle: 'Only your friends can see this',
                             value: 'friends',
                           ),
-                          Divider(height: 1, color: Colors.grey.shade300),
+                          Divider(height: 1, color: Theme.of(context).colorScheme.outline),
                           _buildPrivacyOption(
                             icon: Icons.group,
-                            iconColor: Colors.purple,
+                            iconColor: Colors.deepPurple,
                             title: 'Selected Groups',
                             subtitle: 'Only selected groups can see this',
                             value: 'group',
@@ -258,9 +254,13 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Select Groups:',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Wrap(
@@ -280,16 +280,20 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                                 }
                               });
                             },
-                            selectedColor: Colors.blue.shade100,
-                            checkmarkColor: Colors.blue,
+                            selectedColor: Theme.of(context).colorScheme.primaryContainer,
+                            checkmarkColor: Theme.of(context).colorScheme.primary,
                             avatar: CircleAvatar(
-                              backgroundColor: isSelected ? Colors.blue : Colors.grey.shade300,
+                              backgroundColor: isSelected 
+                                  ? Theme.of(context).colorScheme.primary 
+                                  : Theme.of(context).colorScheme.surfaceVariant,
                               radius: 12,
                               child: Text(
                                 group.name.substring(0, 1).toUpperCase(),
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: isSelected ? Colors.white : Colors.black,
+                                  color: isSelected 
+                                      ? Theme.of(context).colorScheme.onPrimary 
+                                      : Theme.of(context).colorScheme.onSurfaceVariant,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -303,7 +307,7 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                         Text(
                           'Selected: ${_selectedGroupIds.length} group(s)',
                           style: TextStyle(
-                            color: Colors.green.shade700,
+                            color: Theme.of(context).colorScheme.primary,
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
                           ),
@@ -320,21 +324,28 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                     children: [
                       Row(
                         children: [
-                          const Text(
+                          Text(
                             'Current Media:',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
                           ),
                           const SizedBox(width: 8),
                           Chip(
                             label: Text('${_currentImages.length + _currentVideos.length}'),
-                            backgroundColor: Colors.grey.shade200,
+                            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                           ),
                         ],
                       ),
                       const SizedBox(height: 8),
                       
                       if (_currentImages.isNotEmpty) ...[
-                        const Text('Images:', style: TextStyle(fontWeight: FontWeight.w500)),
+                        Text('Images:', style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        )),
                         const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
@@ -349,7 +360,10 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                       ],
                       
                       if (_currentVideos.isNotEmpty) ...[
-                        const Text('Videos:', style: TextStyle(fontWeight: FontWeight.w500)),
+                        Text('Videos:', style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        )),
                         const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
@@ -369,9 +383,13 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Add More Media (optional):',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -383,6 +401,8 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                             label: const Text('Add Photos'),
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 12),
+                              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                              foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
                             ),
                           ),
                         ),
@@ -394,6 +414,8 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                             label: const Text('Add Video'),
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 12),
+                              backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+                              foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
                             ),
                           ),
                         ),
@@ -403,7 +425,7 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                     Text(
                       'Max 10 images total, Max 3 videos total',
                       style: TextStyle(
-                        color: Colors.grey.shade600,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 12,
                       ),
                     ),
@@ -412,12 +434,15 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                       const SizedBox(height: 16),
                       Row(
                         children: [
-                          const Text('New Photos:', style: TextStyle(fontWeight: FontWeight.w500)),
+                          Text('New Photos:', style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          )),
                           const SizedBox(width: 8),
                           Chip(
                             label: Text('${_newImages.length}'),
-                            backgroundColor: Colors.blue.shade50,
-                            side: BorderSide(color: Colors.blue.shade200),
+                            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                            side: BorderSide(color: Theme.of(context).colorScheme.primary),
                           ),
                         ],
                       ),
@@ -437,12 +462,15 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                       const SizedBox(height: 16),
                       Row(
                         children: [
-                          const Text('New Videos:', style: TextStyle(fontWeight: FontWeight.w500)),
+                          Text('New Videos:', style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          )),
                           const SizedBox(width: 8),
                           Chip(
                             label: Text('${_newVideos.length}'),
-                            backgroundColor: Colors.green.shade50,
-                            side: BorderSide(color: Colors.green.shade200),
+                            backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+                            side: BorderSide(color: Theme.of(context).colorScheme.secondary),
                           ),
                         ],
                       ),
@@ -468,8 +496,8 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                   child: ElevatedButton(
                     onPressed: (_isLoading || _isDeleting) ? null : _saveChanges,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).primaryColor,
-                      foregroundColor: Colors.white,
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
                     ),
                     child: _isLoading
                         ? const CircularProgressIndicator(color: Colors.white)
@@ -485,8 +513,8 @@ class _EditDiaryFullScreenState extends State<EditDiaryFullScreen> {
                     child: ElevatedButton(
                       onPressed: (_isLoading || _isDeleting) ? null : _deleteDiary,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
+                        backgroundColor: Theme.of(context).colorScheme.error,
+                        foregroundColor: Theme.of(context).colorScheme.onError,
                       ),
                       child: _isDeleting
                           ? const CircularProgressIndicator(color: Colors.white)
