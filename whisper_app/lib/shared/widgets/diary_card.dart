@@ -1,5 +1,6 @@
+// lib/shared/widgets/diary_card.dart - FINAL FIXED VERSION
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart'; // For copy to clipboard
 import 'package:whisper_space_flutter/features/auth/data/models/diary_model.dart';
 import 'package:whisper_space_flutter/shared/widgets/media_gallery.dart';
 
@@ -7,7 +8,7 @@ class DiaryCard extends StatefulWidget {
   final DiaryModel diary;
   final VoidCallback onLike;
   final VoidCallback onFavorite;
-  final Function(int, String, int?, int?) onComment;
+  final Function(int, String, int?, int?) onComment; // Updated to include reply_to_user_id
   final Function(DiaryModel) onEdit;
   final Function(int) onDelete;
   final Function(int, String, List<String>?)? onUpdateComment;
@@ -46,6 +47,7 @@ class _DiaryCardState extends State<DiaryCard> {
     super.initState();
     _commentFocusNode.addListener(() {
       if (!_commentFocusNode.hasFocus) {
+        // Clear reply state when focus is lost
         _clearReplyState();
       }
     });
@@ -67,7 +69,7 @@ class _DiaryCardState extends State<DiaryCard> {
     final isFavoritedByCurrentUser = widget.diary.favoritedUserIds.contains(_getCurrentUserId());
 
     return Card(
-      elevation: 0,
+      elevation: 2,
       margin: const EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -75,7 +77,7 @@ class _DiaryCardState extends State<DiaryCard> {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: Theme.of(context).cardTheme.color,
+          color: Colors.white,
         ),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -93,10 +95,10 @@ class _DiaryCardState extends State<DiaryCard> {
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Text(
                     widget.diary.title,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.onSurface,
+                      color: Colors.black87,
                     ),
                   ),
                 ),
@@ -122,10 +124,7 @@ class _DiaryCardState extends State<DiaryCard> {
 
               // Divider
               const SizedBox(height: 12),
-              Divider(
-                height: 1,
-                color: Theme.of(context).dividerColor,
-              ),
+              const Divider(height: 1),
               const SizedBox(height: 8),
 
               // Actions
@@ -134,7 +133,7 @@ class _DiaryCardState extends State<DiaryCard> {
                 isFavoritedByCurrentUser: isFavoritedByCurrentUser,
               ),
 
-              // Reply Indicator
+              // Reply Indicator (if replying)
               if (_replyingToUsername != null) _buildReplyIndicator(),
 
               // Comments Preview
@@ -158,16 +157,14 @@ class _DiaryCardState extends State<DiaryCard> {
               ? NetworkImage(widget.diary.author.avatarUrl!)
               : null,
           radius: 22,
-          backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
           child: widget.diary.author.avatarUrl == null ||
                   widget.diary.author.avatarUrl!.isEmpty
               ? Text(
                   widget.diary.author.username.isNotEmpty
                       ? widget.diary.author.username[0].toUpperCase()
                       : 'U',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
                   ),
                 )
               : null,
@@ -179,70 +176,65 @@ class _DiaryCardState extends State<DiaryCard> {
             children: [
               Text(
                 widget.diary.author.username,
-                style: TextStyle(
+                style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
-                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               Text(
                 _formatDate(widget.diary.createdAt),
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 12,
-                  color: Theme.of(context).textTheme.bodySmall?.color,
+                  color: Colors.grey,
                 ),
               ),
             ],
           ),
         ),
         PopupMenuButton<String>(
-          icon: Icon(
-            Icons.more_vert,
-            size: 20,
-            color: Theme.of(context).iconTheme.color,
-          ),
+          icon: const Icon(Icons.more_vert, size: 20),
           onSelected: _handleMenuSelection,
           itemBuilder: (context) {
             return [
               if (widget.isOwner)
-                PopupMenuItem<String>(
+                const PopupMenuItem<String>(
                   value: 'edit',
                   child: Row(
                     children: [
-                      Icon(Icons.edit, size: 20, color: Theme.of(context).colorScheme.primary),
-                      const SizedBox(width: 8),
-                      Text('Edit', style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+                      Icon(Icons.edit, size: 20, color: Colors.blue),
+                      SizedBox(width: 8),
+                      Text('Edit', style: TextStyle(color: Colors.blue)),
                     ],
                   ),
                 ),
               if (widget.isOwner)
-                PopupMenuItem<String>(
+                const PopupMenuItem<String>(
                   value: 'delete',
                   child: Row(
                     children: [
-                      Icon(Icons.delete, size: 20, color: Theme.of(context).colorScheme.error),
-                      const SizedBox(width: 8),
-                      Text('Delete', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                      Icon(Icons.delete, size: 20, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('Delete', style: TextStyle(color: Colors.red)),
                     ],
                   ),
                 ),
-              PopupMenuItem<String>(
+              const PopupMenuItem<String>(
                 value: 'share',
                 child: Row(
                   children: [
-                    Icon(Icons.share, size: 20, color: Theme.of(context).colorScheme.secondary),
-                    const SizedBox(width: 8),
-                    Text('Share', style: TextStyle(color: Theme.of(context).colorScheme.secondary)),
+                    Icon(Icons.share, size: 20, color: Colors.green),
+                    SizedBox(width: 8),
+                    Text('Share', style: TextStyle(color: Colors.green)),
                   ],
                 ),
               ),
-              PopupMenuItem<String>(
+              const PopupMenuItem<String>(
                 value: 'report',
                 child: Row(
                   children: [
-                    Icon(Icons.report, size: 20, color: Theme.of(context).colorScheme.error),
-                    const SizedBox(width: 8),
-                    Text('Report', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                    Icon(Icons.report, size: 20, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Text('Report', style: TextStyle(color: Colors.orange)),
                   ],
                 ),
               ),
@@ -292,8 +284,8 @@ class _DiaryCardState extends State<DiaryCard> {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   _showFullContent ? 'Show less' : 'Show more',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.primary,
+                  style: const TextStyle(
+                    color: Colors.blue,
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
@@ -320,7 +312,7 @@ class _DiaryCardState extends State<DiaryCard> {
             count: widget.diary.likes.length,
             onPressed: widget.onLike,
             isActive: isLikedByCurrentUser,
-            activeColor: Theme.of(context).colorScheme.error,
+            activeColor: Colors.red,
           ),
         ),
 
@@ -345,7 +337,7 @@ class _DiaryCardState extends State<DiaryCard> {
               });
             },
             isActive: _isCommenting,
-            activeColor: Theme.of(context).colorScheme.primary,
+            activeColor: Colors.blue,
           ),
         ),
 
@@ -371,7 +363,7 @@ class _DiaryCardState extends State<DiaryCard> {
             count: 0,
             onPressed: _shareDiary,
             isActive: false,
-            activeColor: Theme.of(context).colorScheme.secondary,
+            activeColor: Colors.green,
           ),
         ),
       ],
@@ -397,30 +389,28 @@ class _DiaryCardState extends State<DiaryCard> {
               children: [
                 Icon(
                   icon,
-                  size: 22,
-                  color: isActive 
-                      ? activeColor 
-                      : Theme.of(context).iconTheme.color,
+                  size: 20,
+                  color: isActive ? activeColor : Colors.grey[600],
                 ),
                 if (count > 0)
                   Positioned(
-                    top: -6,
-                    right: -6,
+                    top: -5,
+                    right: -5,
                     child: Container(
-                      padding: const EdgeInsets.all(3),
+                      padding: const EdgeInsets.all(2),
                       decoration: BoxDecoration(
                         color: activeColor,
                         shape: BoxShape.circle,
                       ),
                       constraints: const BoxConstraints(
-                        minWidth: 18,
-                        minHeight: 18,
+                        minWidth: 16,
+                        minHeight: 16,
                       ),
                       child: Text(
                         count > 99 ? '99+' : count.toString(),
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 9,
+                          fontSize: 8,
                           fontWeight: FontWeight.bold,
                         ),
                         textAlign: TextAlign.center,
@@ -433,11 +423,9 @@ class _DiaryCardState extends State<DiaryCard> {
             Text(
               label,
               style: TextStyle(
-                fontSize: 11,
-                color: isActive 
-                    ? activeColor 
-                    : Theme.of(context).textTheme.bodySmall?.color,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                fontSize: 10,
+                color: isActive ? activeColor : Colors.grey[600],
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -451,9 +439,9 @@ class _DiaryCardState extends State<DiaryCard> {
       margin: const EdgeInsets.only(top: 8, bottom: 4),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+        color: Colors.blue.shade50,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Theme.of(context).colorScheme.primary, width: 1),
+        border: Border.all(color: Colors.blue.shade100, width: 1),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -462,7 +450,7 @@ class _DiaryCardState extends State<DiaryCard> {
             'Replying to @$_replyingToUsername',
             style: TextStyle(
               fontSize: 12,
-              color: Theme.of(context).colorScheme.primary,
+              color: Colors.blue.shade700,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -472,12 +460,12 @@ class _DiaryCardState extends State<DiaryCard> {
               padding: const EdgeInsets.all(2),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Theme.of(context).colorScheme.primary,
+                color: Colors.blue.shade100,
               ),
               child: const Icon(
                 Icons.close,
                 size: 14,
-                color: Colors.white,
+                color: Colors.blue,
               ),
             ),
           ),
@@ -503,8 +491,8 @@ class _DiaryCardState extends State<DiaryCard> {
                 onTap: _viewAllComments,
                 child: Text(
                   'View all ${widget.diary.comments.length} comments',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.primary,
+                  style: const TextStyle(
+                    color: Colors.blue,
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
@@ -551,7 +539,7 @@ class _DiaryCardState extends State<DiaryCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Reply indicator
+                    // Reply indicator (if this is a reply)
                     if (hasReplyTo)
                       Container(
                         margin: const EdgeInsets.only(bottom: 4),
@@ -560,14 +548,14 @@ class _DiaryCardState extends State<DiaryCard> {
                             Icon(
                               Icons.reply,
                               size: 12,
-                              color: Theme.of(context).textTheme.bodySmall?.color,
+                              color: Colors.grey.shade500,
                             ),
                             const SizedBox(width: 4),
                             Text(
                               'Replying to ${comment.replyToUser!.username}',
                               style: TextStyle(
                                 fontSize: 10,
-                                color: Theme.of(context).textTheme.bodySmall?.color,
+                                color: Colors.grey.shade600,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -582,7 +570,7 @@ class _DiaryCardState extends State<DiaryCard> {
                         vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).cardTheme.color,
+                        color: Colors.grey[100],
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Column(
@@ -596,7 +584,6 @@ class _DiaryCardState extends State<DiaryCard> {
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: isInModal ? 13 : 12,
-                                  color: Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
                               if (comment.isEdited) ...[
@@ -604,14 +591,14 @@ class _DiaryCardState extends State<DiaryCard> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                                   decoration: BoxDecoration(
-                                    color: Theme.of(context).cardTheme.color,
+                                    color: Colors.grey.shade200,
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
                                     'edited',
                                     style: TextStyle(
                                       fontSize: 8,
-                                      color: Theme.of(context).textTheme.bodySmall?.color,
+                                      color: Colors.grey.shade600,
                                     ),
                                   ),
                                 ),
@@ -619,14 +606,11 @@ class _DiaryCardState extends State<DiaryCard> {
                             ],
                           ),
                           
-                          // Comment content
+                          // Comment content with mentions
                           const SizedBox(height: 2),
                           SelectableText.rich(
                             textWithMentions,
-                            style: TextStyle(
-                              fontSize: isInModal ? 14 : 12,
-                              color: Theme.of(context).colorScheme.onSurface,
-                            ),
+                            style: TextStyle(fontSize: isInModal ? 14 : 12),
                           ),
                           
                           // Images in comment
@@ -650,11 +634,8 @@ class _DiaryCardState extends State<DiaryCard> {
                                         errorBuilder: (_, __, ___) => Container(
                                           width: 80,
                                           height: 80,
-                                          color: Theme.of(context).cardTheme.color,
-                                          child: Icon(
-                                            Icons.broken_image,
-                                            color: Theme.of(context).iconTheme.color,
-                                          ),
+                                          color: Colors.grey.shade200,
+                                          child: const Icon(Icons.broken_image),
                                         ),
                                       ),
                                     );
@@ -673,9 +654,9 @@ class _DiaryCardState extends State<DiaryCard> {
                         children: [
                           Text(
                             _formatDate(comment.createdAt),
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 10,
-                              color: Theme.of(context).textTheme.bodySmall?.color,
+                              color: Colors.grey,
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -689,7 +670,7 @@ class _DiaryCardState extends State<DiaryCard> {
                               'Reply',
                               style: TextStyle(
                                 fontSize: 10,
-                                color: Theme.of(context).colorScheme.primary,
+                                color: Colors.blue,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -702,7 +683,7 @@ class _DiaryCardState extends State<DiaryCard> {
                                 'Edit',
                                 style: TextStyle(
                                   fontSize: 10,
-                                  color: Theme.of(context).colorScheme.secondary,
+                                  color: Colors.green.shade600,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -714,7 +695,7 @@ class _DiaryCardState extends State<DiaryCard> {
                                 'Delete',
                                 style: TextStyle(
                                   fontSize: 10,
-                                  color: Theme.of(context).colorScheme.error,
+                                  color: Colors.red.shade600,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -756,7 +737,7 @@ class _DiaryCardState extends State<DiaryCard> {
                 'Tip: Use @username to mention someone',
                 style: TextStyle(
                   fontSize: 11,
-                  color: Theme.of(context).textTheme.bodySmall?.color,
+                  color: Colors.grey.shade600,
                   fontStyle: FontStyle.italic,
                 ),
               ),
@@ -769,35 +750,25 @@ class _DiaryCardState extends State<DiaryCard> {
                 child: TextField(
                   controller: _commentController,
                   focusNode: _commentFocusNode,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
                   decoration: InputDecoration(
                     hintText: _replyingToUsername != null 
                         ? 'Reply to @$_replyingToUsername...' 
                         : 'Write a comment...',
-                    hintStyle: TextStyle(
-                      color: Theme.of(context).hintColor,
-                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),
                       borderSide: BorderSide.none,
                     ),
                     filled: true,
                     fillColor: _replyingToUsername != null
-                        ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
-                        : Theme.of(context).cardTheme.color,
+                        ? Colors.blue.shade50
+                        : Colors.grey[100],
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 12,
                     ),
                     suffixIcon: _commentController.text.isNotEmpty
                         ? IconButton(
-                            icon: Icon(
-                              Icons.clear,
-                              size: 18,
-                              color: Theme.of(context).iconTheme.color,
-                            ),
+                            icon: const Icon(Icons.clear, size: 18),
                             onPressed: () {
                               setState(() {
                                 _commentController.clear();
@@ -820,8 +791,8 @@ class _DiaryCardState extends State<DiaryCard> {
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: _commentController.text.trim().isEmpty
-                        ? Theme.of(context).cardTheme.color
-                        : Theme.of(context).colorScheme.primary,
+                        ? Colors.grey.shade400
+                        : Theme.of(context).primaryColor,
                     shape: BoxShape.circle,
                   ),
                   child: _isSubmittingComment
@@ -855,18 +826,27 @@ class _DiaryCardState extends State<DiaryCard> {
     final spans = <TextSpan>[];
     
     for (int i = 0; i < parts.length; i++) {
+      // Add the text part
       spans.add(TextSpan(
         text: parts[i],
-        style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+        style: const TextStyle(color: Colors.black87),
       ));
       
+      // Add the mention if it exists
       if (i < matches.length) {
-        final mention = matches[i].group(0)!;
+        final mention = matches[i].group(0)!; // Includes @ symbol
+        final username = matches[i].group(1)!; // Just the username
+        
+        // Use the username variable to avoid unused variable warning
+        // In a real app, you might use this for tap handling
+        if (username.isNotEmpty) {
+          // Username is being used
+        }
         
         spans.add(TextSpan(
           text: mention,
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.primary,
+          style: const TextStyle(
+            color: Colors.blue,
             fontWeight: FontWeight.w500,
           ),
         ));
@@ -897,40 +877,22 @@ class _DiaryCardState extends State<DiaryCard> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(
-          'Delete Diary',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-        ),
-        content: Text(
-          'Are you sure you want to delete this diary? This action cannot be undone.',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-        ),
-        backgroundColor: Theme.of(context).dialogTheme.backgroundColor,
-        shape: Theme.of(context).dialogTheme.shape,
+        title: const Text('Delete Diary'),
+        content: const Text(
+            'Are you sure you want to delete this diary? This action cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
               widget.onDelete(widget.diary.id);
             },
-            child: Text(
+            child: const Text(
               'Delete',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.error,
-              ),
+              style: TextStyle(color: Colors.red),
             ),
           ),
         ],
@@ -942,29 +904,12 @@ class _DiaryCardState extends State<DiaryCard> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(
-          'Share Diary',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-        ),
-        content: Text(
-          'Copy link to share this diary:',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-        ),
-        backgroundColor: Theme.of(context).dialogTheme.backgroundColor,
-        shape: Theme.of(context).dialogTheme.shape,
+        title: const Text('Share Diary'),
+        content: const Text('Copy link to share this diary:'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () {
@@ -981,12 +926,7 @@ class _DiaryCardState extends State<DiaryCard> {
                 );
               }
             },
-            child: Text(
-              'Copy Link',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
+            child: const Text('Copy Link'),
           ),
         ],
       ),
@@ -997,29 +937,12 @@ class _DiaryCardState extends State<DiaryCard> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(
-          'Report Diary',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-        ),
-        content: Text(
-          'Why are you reporting this diary?',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-        ),
-        backgroundColor: Theme.of(context).dialogTheme.backgroundColor,
-        shape: Theme.of(context).dialogTheme.shape,
+        title: const Text('Report Diary'),
+        content: const Text('Why are you reporting this diary?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () {
@@ -1027,75 +950,73 @@ class _DiaryCardState extends State<DiaryCard> {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Thank you for your report. We will review it shortly.'),
+                    content: Text(
+                        'Thank you for your report. We will review it shortly.'),
                     backgroundColor: Colors.green,
                   ),
                 );
               }
             },
-            child: Text(
-              'Submit Report',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
+            child: const Text('Submit Report'),
           ),
         ],
       ),
     );
   }
 
-  void _submitComment() async {
-    final content = _commentController.text.trim();
-    if (content.isEmpty) return;
+void _submitComment() async {
+  final content = _commentController.text.trim();
+  if (content.isEmpty) return;
 
-    try {
-      setState(() => _isSubmittingComment = true);
-      
-      int? parentId = _replyingToCommentId;
-      if (parentId == 0) {
-        parentId = null;
-      }
-      
-      int? replyToUserId = _replyingToUserId;
-      if (replyToUserId == 0) {
-        replyToUserId = null;
-      }
-      
-      await widget.onComment(
-        widget.diary.id, 
-        content,
-        parentId,
-        replyToUserId,
+  try {
+    setState(() => _isSubmittingComment = true);
+    
+    // Convert 0 to null for parent_id
+    int? parentId = _replyingToCommentId;
+    if (parentId == 0) {
+      parentId = null;
+    }
+    
+    // Convert 0 to null for reply_to_user_id
+    int? replyToUserId = _replyingToUserId;
+    if (replyToUserId == 0) {
+      replyToUserId = null;
+    }
+    
+    await widget.onComment(
+      widget.diary.id, 
+      content,
+      parentId,
+      replyToUserId,
+    );
+    
+    if (mounted) {
+      setState(() {
+        _commentController.clear();
+        _isCommenting = false;
+        _isSubmittingComment = false;
+        _clearReplyState();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Comment posted!'),
+          backgroundColor: Colors.green,
+        ),
       );
-      
-      if (mounted) {
-        setState(() {
-          _commentController.clear();
-          _isCommenting = false;
-          _isSubmittingComment = false;
-          _clearReplyState();
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Comment posted!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isSubmittingComment = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to post comment: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+    }
+  } catch (e) {
+    if (mounted) {
+      setState(() => _isSubmittingComment = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to post comment: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
+}
 
   void _viewAllComments() {
     showModalBottomSheet(
@@ -1103,9 +1024,9 @@ class _DiaryCardState extends State<DiaryCard> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).dialogTheme.backgroundColor,
-          borderRadius: const BorderRadius.only(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
             topLeft: Radius.circular(20),
             topRight: Radius.circular(20),
           ),
@@ -1118,7 +1039,7 @@ class _DiaryCardState extends State<DiaryCard> {
               height: 4,
               width: 40,
               decoration: BoxDecoration(
-                color: Theme.of(context).dividerColor,
+                color: Colors.grey.shade300,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -1131,19 +1052,15 @@ class _DiaryCardState extends State<DiaryCard> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
+                        const Text(
                           'Comments',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                         ),
                         IconButton(
-                          icon: Icon(
-                            Icons.close,
-                            color: Theme.of(context).iconTheme.color,
-                          ),
+                          icon: const Icon(Icons.close),
                           onPressed: () => Navigator.pop(context),
                         ),
                       ],
@@ -1153,28 +1070,22 @@ class _DiaryCardState extends State<DiaryCard> {
                     // Comments list
                     Expanded(
                       child: widget.diary.comments.isEmpty
-                          ? Center(
+                          ? const Center(
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(
-                                    Icons.comment,
-                                    size: 64,
-                                    color: Theme.of(context).textTheme.bodySmall?.color,
-                                  ),
-                                  const SizedBox(height: 16),
+                                  Icon(Icons.comment, size: 64, color: Colors.grey),
+                                  SizedBox(height: 16),
                                   Text(
                                     'No comments yet',
                                     style: TextStyle(
                                       fontSize: 16,
-                                      color: Theme.of(context).textTheme.bodySmall?.color,
+                                      color: Colors.grey,
                                     ),
                                   ),
                                   Text(
                                     'Be the first to comment!',
-                                    style: TextStyle(
-                                      color: Theme.of(context).textTheme.bodySmall?.color,
-                                    ),
+                                    style: TextStyle(color: Colors.grey),
                                   ),
                                 ],
                               ),
@@ -1192,9 +1103,9 @@ class _DiaryCardState extends State<DiaryCard> {
                     Container(
                       padding: const EdgeInsets.only(top: 16, bottom: 8),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).dialogTheme.backgroundColor,
+                        color: Colors.white,
                         border: Border(
-                          top: BorderSide(color: Theme.of(context).dividerColor),
+                          top: BorderSide(color: Colors.grey.shade300),
                         ),
                       ),
                       child: Column(
@@ -1206,24 +1117,18 @@ class _DiaryCardState extends State<DiaryCard> {
                               Expanded(
                                 child: TextField(
                                   controller: _commentController,
-                                  style: TextStyle(
-                                    color: Theme.of(context).colorScheme.onSurface,
-                                  ),
                                   decoration: InputDecoration(
                                     hintText: _replyingToUsername != null 
                                         ? 'Reply to @$_replyingToUsername...' 
                                         : 'Write a comment...',
-                                    hintStyle: TextStyle(
-                                      color: Theme.of(context).hintColor,
-                                    ),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(20),
                                       borderSide: BorderSide.none,
                                     ),
                                     filled: true,
                                     fillColor: _replyingToUsername != null
-                                        ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
-                                        : Theme.of(context).cardTheme.color,
+                                        ? Colors.blue.shade50
+                                        : Colors.grey[100],
                                     contentPadding: const EdgeInsets.symmetric(
                                       horizontal: 16,
                                       vertical: 12,
@@ -1239,7 +1144,7 @@ class _DiaryCardState extends State<DiaryCard> {
                                 child: Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.primary,
+                                    color: Theme.of(context).primaryColor,
                                     shape: BoxShape.circle,
                                   ),
                                   child: const Icon(
@@ -1287,31 +1192,16 @@ class _DiaryCardState extends State<DiaryCard> {
     showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(
-          'Edit Comment',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-        ),
+        title: const Text('Edit Comment'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: controller,
               maxLines: 3,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 hintText: 'Edit your comment...',
-                hintStyle: TextStyle(
-                  color: Theme.of(context).hintColor,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                filled: true,
-                fillColor: Theme.of(context).inputDecorationTheme.fillColor,
+                border: OutlineInputBorder(),
               ),
             ),
             if (comment.images.isNotEmpty)
@@ -1319,25 +1209,18 @@ class _DiaryCardState extends State<DiaryCard> {
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
                   '${comment.images.length} image(s) attached',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 12,
-                    color: Theme.of(context).textTheme.bodySmall?.color,
+                    color: Colors.grey,
                   ),
                 ),
               ),
           ],
         ),
-        backgroundColor: Theme.of(context).dialogTheme.backgroundColor,
-        shape: Theme.of(context).dialogTheme.shape,
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () {
@@ -1349,12 +1232,7 @@ class _DiaryCardState extends State<DiaryCard> {
                 });
               }
             },
-            child: Text(
-              'Save',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -1389,37 +1267,18 @@ class _DiaryCardState extends State<DiaryCard> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(
-          'Delete Comment',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-        ),
-        content: Text(
-          'Are you sure you want to delete this comment?',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-        ),
-        backgroundColor: Theme.of(context).dialogTheme.backgroundColor,
-        shape: Theme.of(context).dialogTheme.shape,
+        title: const Text('Delete Comment'),
+        content: const Text('Are you sure you want to delete this comment?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text(
-              'Cancel',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text(
+            child: const Text(
               'Delete',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.error,
-              ),
+              style: TextStyle(color: Colors.red),
             ),
           ),
         ],

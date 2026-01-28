@@ -30,7 +30,7 @@ class CustomButton extends StatelessWidget {
     
     switch (variant) {
       case ButtonVariant.primary:
-        backgroundColor = theme.colorScheme.primary;
+        backgroundColor = theme.primaryColor;
         foregroundColor = theme.colorScheme.onPrimary;
         borderSide = BorderSide.none;
         break;
@@ -41,12 +41,12 @@ class CustomButton extends StatelessWidget {
         break;
       case ButtonVariant.outlined:
         backgroundColor = Colors.transparent;
-        foregroundColor = theme.colorScheme.primary;
-        borderSide = BorderSide(color: theme.colorScheme.primary, width: 1);
+        foregroundColor = theme.primaryColor;
+        borderSide = BorderSide(color: theme.primaryColor, width: 1);
         break;
       case ButtonVariant.text:
         backgroundColor = Colors.transparent;
-        foregroundColor = theme.colorScheme.primary;
+        foregroundColor = theme.primaryColor;
         borderSide = BorderSide.none;
         break;
     }
@@ -54,17 +54,12 @@ class CustomButton extends StatelessWidget {
     final buttonStyle = ElevatedButton.styleFrom(
       backgroundColor: backgroundColor,
       foregroundColor: foregroundColor,
-      side: borderSide,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
+        side: borderSide,
       ),
-      elevation: 0,
-      shadowColor: Colors.transparent,
-      textStyle: const TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.w600,
-      ),
+      elevation: variant == ButtonVariant.primary ? 2 : 0,
     );
     
     Widget child = isLoading
@@ -78,7 +73,6 @@ class CustomButton extends StatelessWidget {
           )
         : Row(
             mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (icon != null) ...[
                 Icon(icon, size: 20),

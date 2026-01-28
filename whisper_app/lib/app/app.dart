@@ -8,10 +8,10 @@ import '../features/auth/presentation/screens/verification_screen.dart';
 import '../features/feed/presentation/screens/feed_screen.dart';
 import '../shared/widgets/theme/app_theme.dart';
 
+
 class WhisperSpaceApp extends StatelessWidget {
   final bool isLoggedIn;
-
-  // Removed 'const' here — this is the main fix
+  
   WhisperSpaceApp({super.key, required this.isLoggedIn});
 
   @override
@@ -26,7 +26,6 @@ class WhisperSpaceApp extends StatelessWidget {
     );
   }
 
-  // late final is fine — but because of GoRouter(...) it cannot be const
   late final GoRouter _router = GoRouter(
     initialLocation: isLoggedIn ? '/home' : '/login',
     routes: [
@@ -65,9 +64,34 @@ class WhisperSpaceApp extends StatelessWidget {
         path: '/home',
         pageBuilder: (context, state) => MaterialPage(
           key: state.pageKey,
-          child: const FeedScreen(),
+          child: _buildHomeScreen(),
         ),
       ),
+       GoRoute(
+        path: '/home',
+        pageBuilder: (context, state) => MaterialPage(
+          key: state.pageKey,
+          child: const FeedScreen(), // Changed from _buildHomeScreen() to FeedScreen
+        ),
+      )
     ],
   );
+
+  Widget _buildHomeScreen() {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Whisper Space'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () {
+            },
+          ),
+        ],
+      ),
+      body: const Center(
+        child: Text('Welcome to Whisper Space!'),
+      ),
+    );
+  }
 }
