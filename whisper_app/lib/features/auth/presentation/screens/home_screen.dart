@@ -1,22 +1,20 @@
 // lib/features/auth/presentation/screens/home_screen.dart
-import 'dart:io';
-
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import 'package:whisper_space_flutter/core/constants/api_constants.dart';
+import 'package:whisper_space_flutter/core/services/storage_service.dart';
 import 'package:whisper_space_flutter/features/auth/data/models/diary_model.dart';
-import 'package:whisper_space_flutter/features/chat/chat_screen.dart';
 import 'package:whisper_space_flutter/features/feed/presentation/screens/create_diary_screen.dart';
 import 'package:whisper_space_flutter/features/feed/presentation/screens/edit_diary_full_screen.dart';
-import 'package:whisper_space_flutter/features/friend/presentation/screens/friend_screen.dart';
 import 'package:whisper_space_flutter/shared/widgets/diary_card.dart';
+import 'package:whisper_space_flutter/features/friend/presentation/screens/friend_screen.dart';
+import 'package:whisper_space_flutter/features/chat/chat_screen.dart';
 
 import '../../../../features/feed/data/datasources/feed_api_service.dart';
 import '../../../../features/feed/presentation/providers/feed_provider.dart';
 import 'login_screen.dart';
 import 'providers/auth_provider.dart';
+import 'package:whisper_space_flutter/features/inbox/inbox_screen.dart';
+import 'package:whisper_space_flutter/features/inbox/inbox_api_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -28,6 +26,11 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   int? _currentUserId; // Store current user ID
+  late final InboxAPISource inboxApi;
+
+  bool isLoading = true;
+  String? error;
+  int _unreadCount = 0;
 
   final List<Widget> _screens = [
     const FeedTab(),
@@ -49,6 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadCurrentUser();
+    _initServicesAndLoad();
   }
 
   void _loadCurrentUser() {
@@ -64,6 +68,28 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  Future<void> _initServicesAndLoad() async{
+    final storageService = StorageService();
+    await storageService.init();
+
+    inboxApi = InboxAPISource(storageService: storageService);
+
+    _loadData();
+  }
+
+  Future<void> _loadData() async{
+    try{
+      final count = await inboxApi.getUnreadActivityCount();
+      setState(() {
+        _unreadCount = count;
+        isLoading = false;
+      });
+    }catch(e){
+      isLoading = false;
+      error = e.toString();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -71,24 +97,33 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Text(_appBarTitles[_selectedIndex]),
         centerTitle: true,
         elevation: 0,
-        actions: _selectedIndex == 4
-            ? [
-                IconButton(
-                  icon: const Icon(Icons.logout),
-                  tooltip: 'Logout',
-                  onPressed: _showLogoutDialog,
-                ),
-              ]
-            : _selectedIndex == 0
-                ? [
-                    // ADDED: Create button in app bar for Feed tab
-                    IconButton(
-                      icon: const Icon(Icons.add),
-                      tooltip: 'Create New Diary',
-                      onPressed: () => _createNewDiaryFromHome(context),
-                    ),
-                  ]
-                : null,
+        actions: [
+          IconButton(
+            tooltip: 'Inbox',
+            onPressed: () async {
+              await showInboxDialog(context);
+
+              _loadData();
+            },
+            icon: Badge(
+              isLabelVisible: _unreadCount > 0,
+              label: Text(_unreadCount > 99 ? '99+' : '$_unreadCount'),
+              child: const Icon(Icons.mail_outline),
+            ),
+          ),
+          if (_selectedIndex == 4)
+            IconButton(
+              icon: const Icon(Icons.logout),
+              tooltip: 'Logout',
+              onPressed: _showLogoutDialog,
+            )
+          else if (_selectedIndex == 0)
+            IconButton(
+              icon: const Icon(Icons.add),
+              tooltip: 'Create New Diary',
+              onPressed: () => _createNewDiaryFromHome(context),
+            ),
+        ],
       ),
       body: _screens[_selectedIndex],
       bottomNavigationBar: _buildBottomNavBar(),
@@ -101,8 +136,14 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildFloatingActionButton(BuildContext context) {
     return FloatingActionButton(
       onPressed: () => _createNewDiaryFromHome(context),
-      child: const Icon(Icons.add),
-      heroTag: 'home_fab', // Unique tag for FAB
+      heroTag: 'home_fab',
+      child: const Icon(Icons.add), // Unique tag for FAB
+    );
+  }
+
+  Future<void> showInboxDialog(BuildContext context) {
+    return Navigator.of(context).push(
+      _RightSlidePageRoute(widget: InboxDialog(unreadCounts: _unreadCount,)),
     );
   }
 
@@ -598,6 +639,26 @@ class _FeedTabState extends State<FeedTab> {
   }
 }
 
+class _RightSlidePageRoute extends PageRouteBuilder {
+  final Widget widget;
+  _RightSlidePageRoute({required this.widget})
+      : super(
+    pageBuilder: (context, animation, secondaryAnimation) => widget,
+    transitionDuration: const Duration(milliseconds: 300),
+    reverseTransitionDuration: const Duration(milliseconds: 300),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final begin = const Offset(1.0, 0.0); // start from right
+      final end = Offset.zero;
+      final curve = Curves.easeInOut;
+      final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+      return SlideTransition(
+        position: animation.drive(tween),
+        child: child,
+      );
+    },
+  );
+}
+
 class MessagesTab extends StatelessWidget {
   const MessagesTab({super.key});
 
@@ -638,471 +699,50 @@ class NotesTab extends StatelessWidget {
   }
 }
 
-class ProfileTab extends StatefulWidget {
+class ProfileTab extends StatelessWidget {
   const ProfileTab({super.key});
-
-  @override
-  State<ProfileTab> createState() => _ProfileTabState();
-}
-
-class _ProfileTabState extends State<ProfileTab> {
-  bool _isUploading = false;
-  bool _isEditingUsername = false;
-  late TextEditingController _usernameController;
-  final GlobalKey<FormState> _usernameFormKey = GlobalKey<FormState>();
-
-  @override
-  void initState() {
-    super.initState();
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    _usernameController = TextEditingController(text: authProvider.currentUser?.username ?? '');
-    
-    // Refresh user data when profile opens
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _refreshUserData();
-    });
-  }
-
-  @override
-  void dispose() {
-    _usernameController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _refreshUserData() async {
-    if (!mounted) return;
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    await authProvider.getCurrentUser();
-    // Update username controller with current username
-    if (authProvider.currentUser != null) {
-      _usernameController.text = authProvider.currentUser!.username;
-    }
-  }
-
-  Future<void> _pickAndUploadAvatar() async {
-    final picker = ImagePicker();
-    try {
-      final XFile? pickedFile = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1024,
-        maxHeight: 1024,
-        imageQuality: 85,
-      );
-      
-      if (pickedFile != null) {
-        final file = File(pickedFile.path);
-        
-        // Check file size (2MB max)
-        final fileSize = await file.length();
-        if (fileSize > 2 * 1024 * 1024) {
-          _showSnackBar('Image too large. Maximum size is 2MB.', true);
-          return;
-        }
-        
-        setState(() {
-          _isUploading = true;
-        });
-        
-        // Upload to backend
-        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-        final success = await authProvider.uploadAvatar(file);
-        
-        if (success) {
-          // Refresh user data after upload
-          await _refreshUserData();
-          _showSnackBar('Avatar updated successfully!', false);
-        } else {
-          _showSnackBar('Failed to upload avatar', true);
-        }
-      }
-    } catch (e) {
-      _showSnackBar('Error: $e', true);
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isUploading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _deleteAvatar() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Remove Avatar'),
-        content: const Text('Are you sure you want to remove your avatar?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              final success = await authProvider.deleteAvatar();
-              if (success) {
-                await _refreshUserData();
-                _showSnackBar('Avatar removed successfully!', false);
-              } else {
-                _showSnackBar('Failed to remove avatar', true);
-              }
-            },
-            child: const Text(
-              'Remove',
-              style: TextStyle(color: Colors.red),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _updateUsername() async {
-    if (!_usernameFormKey.currentState!.validate()) return;
-    
-    final newUsername = _usernameController.text.trim();
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final currentUser = authProvider.currentUser;
-    
-    if (currentUser == null) {
-      _showSnackBar('Please login first', true);
-      return;
-    }
-    
-    if (newUsername == currentUser.username) {
-      setState(() => _isEditingUsername = false);
-      return;
-    }
-    
-    try {
-      // Show loading
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-      
-      // Call API to update username
-      final dio = Dio();
-      final token = await authProvider.storageService.getToken();
-      
-      final response = await dio.put(
-        '${ApiConstants.baseUrl}/api/v1/users/me',
-        data: {'username': newUsername},
-        options: Options(
-          headers: {'Authorization': 'Bearer $token'},
-        ),
-      );
-      
-      Navigator.pop(context); // Close loading dialog
-      
-      if (response.statusCode == 200) {
-        setState(() => _isEditingUsername = false);
-        await _refreshUserData();
-        _showSnackBar('Username updated successfully!', false);
-      } else {
-        _showSnackBar('Failed to update username', true);
-      }
-    } catch (e) {
-      Navigator.pop(context); // Close loading dialog
-      _showSnackBar('Error: $e', true);
-    }
-  }
-
-  void _showSnackBar(String message, bool isError) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.green,
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
         final user = authProvider.currentUser;
-        
-        if (user == null) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 20),
-                Text('Loading profile...'),
-              ],
-            ),
-          );
-        }
-        
-        // Get dynamic avatar URL from backend
-        final avatarUrl = user.avatarUrl;
-        final hasAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              // Profile Header with Dynamic Avatar
+              // Profile Header
               Card(
                 elevation: 2,
                 child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
-                      // Avatar with upload button
-                      Stack(
-                        children: [
-                          Container(
-                            width: 120,
-                            height: 120,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: const Color(0xFF6C63FF),
-                                width: 3,
-                              ),
-                            ),
-                            child: ClipOval(
-                              child: _isUploading
-                                  ? Container(
-                                      color: Colors.grey[200],
-                                      child: const Center(
-                                        child: CircularProgressIndicator(
-                                          color: Color(0xFF6C63FF),
-                                        ),
-                                      ),
-                                    )
-                                  : hasAvatar
-                                      ? Image.network(
-                                          avatarUrl,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (context, error, stackTrace) {
-                                            print('❌ Avatar load error: $error');
-                                            return Container(
-                                              color: const Color(0xFF6C63FF),
-                                              child: const Icon(
-                                                Icons.person,
-                                                size: 60,
-                                                color: Colors.white,
-                                              ),
-                                            );
-                                          },
-                                          loadingBuilder: (context, child, loadingProgress) {
-                                            if (loadingProgress == null) return child;
-                                            return const Center(
-                                              child: CircularProgressIndicator(),
-                                            );
-                                          },
-                                        )
-                                      : Container(
-                                          color: const Color(0xFF6C63FF),
-                                          child: const Icon(
-                                            Icons.person,
-                                            size: 60,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                            ),
-                          ),
-                          Positioned(
-                            bottom: 0,
-                            right: 0,
-                            child: GestureDetector(
-                              onTap: _pickAndUploadAvatar,
-                              child: Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF6C63FF),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white,
-                                    width: 3,
-                                  ),
-                                ),
-                                child: _isUploading
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                        ),
-                                      )
-                                    : const Icon(
-                                        Icons.camera_alt,
-                                        size: 20,
-                                        color: Colors.white,
-                                      ),
-                              ),
-                            ),
-                          ),
-                        ],
+                      const CircleAvatar(
+                        radius: 50,
+                        backgroundColor: Color(0xFF6C63FF),
+                        child: Icon(
+                          Icons.person,
+                          size: 60,
+                          color: Colors.white,
+                        ),
                       ),
-                      
-                      const SizedBox(height: 20),
-                      
-                      // Username Section
-                      _isEditingUsername
-                          ? Form(
-                              key: _usernameFormKey,
-                              child: Column(
-                                children: [
-                                  TextFormField(
-                                    controller: _usernameController,
-                                    decoration: InputDecoration(
-                                      labelText: 'Username',
-                                      hintText: 'Enter new username',
-                                      border: const OutlineInputBorder(),
-                                      suffixIcon: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          IconButton(
-                                            icon: const Icon(Icons.check, color: Colors.green),
-                                            onPressed: _updateUsername,
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(Icons.close, color: Colors.red),
-                                            onPressed: () {
-                                              setState(() {
-                                                _isEditingUsername = false;
-                                                _usernameController.text = user.username;
-                                              });
-                                            },
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    validator: (value) {
-                                      if (value == null || value.trim().isEmpty) {
-                                        return 'Username cannot be empty';
-                                      }
-                                      if (value.trim().length < 3) {
-                                        return 'Username must be at least 3 characters';
-                                      }
-                                      if (value.trim().length > 20) {
-                                        return 'Username cannot exceed 20 characters';
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                                  const SizedBox(height: 8),
-                                  const Text(
-                                    'Username must be 3-20 characters',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  user.username,
-                                  style: const TextStyle(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                IconButton(
-                                  icon: const Icon(Icons.edit, size: 18),
-                                  onPressed: () {
-                                    setState(() {
-                                      _isEditingUsername = true;
-                                    });
-                                  },
-                                  tooltip: 'Edit username',
-                                ),
-                              ],
-                            ),
-                      
+                      const SizedBox(height: 16),
+                      Text(
+                        user?.username ?? 'User',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       Text(
-                        user.email,
+                        user?.email ?? '',
                         style: const TextStyle(
                           fontSize: 16,
                           color: Colors.grey,
                         ),
-                      ),
-                      
-                      // Bio if available
-                      if (user.bio != null && user.bio!.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: Text(
-                            user.bio!,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ),
-                      
-                      // Account verification status
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              user.isVerified ? Icons.verified : Icons.verified_outlined,
-                              size: 16,
-                              color: user.isVerified ? Colors.green : Colors.grey,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              user.isVerified ? 'Verified' : 'Not Verified',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: user.isVerified ? Colors.green : Colors.grey,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      
-                      // Avatar actions
-                      const SizedBox(height: 20),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          ElevatedButton.icon(
-                            onPressed: _pickAndUploadAvatar,
-                            icon: const Icon(Icons.edit),
-                            label: const Text('Change Avatar'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue.shade50,
-                              foregroundColor: Colors.blue,
-                            ),
-                          ),
-                          if (hasAvatar) ...[
-                            const SizedBox(width: 12),
-                            ElevatedButton.icon(
-                              onPressed: _deleteAvatar,
-                              icon: const Icon(Icons.delete, size: 20),
-                              label: const Text('Remove', style: TextStyle(color: Colors.red)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red.shade50,
-                                foregroundColor: Colors.red,
-                              ),
-                            ),
-                          ],
-                        ],
                       ),
                     ],
                   ),
@@ -1111,28 +751,19 @@ class _ProfileTabState extends State<ProfileTab> {
 
               const SizedBox(height: 20),
 
-              // Account Info Card
-              Card(
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: const Icon(Icons.calendar_today, color: Color(0xFF6C63FF)),
-                      title: const Text('Member Since'),
-                      subtitle: Text(
-                        '${user.createdAt.day}/${user.createdAt.month}/${user.createdAt.year}',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    ),
-                    const Divider(height: 0),
-                    ListTile(
-                      leading: const Icon(Icons.update, color: Color(0xFF6C63FF)),
-                      title: const Text('Last Updated'),
-                      subtitle: Text(
-                        '${user.updatedAt.day}/${user.updatedAt.month}/${user.updatedAt.year}',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    ),
-                  ],
+              // Stats
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _StatItem(value: '24', label: 'Posts'),
+                      _StatItem(value: '128', label: 'Friends'),
+                      _StatItem(value: '15', label: 'Notes'),
+                      _StatItem(value: '42', label: 'Likes'),
+                    ],
+                  ),
                 ),
               ),
 
@@ -1201,6 +832,37 @@ class _ProfileTabState extends State<ProfileTab> {
       title: Text(title),
       trailing: const Icon(Icons.chevron_right, color: Colors.grey),
       onTap: onTap,
+    );
+  }
+}
+
+class _StatItem extends StatelessWidget {
+  final String value;
+  final String label;
+
+  const _StatItem({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF6C63FF),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Colors.grey,
+          ),
+        ),
+      ],
     );
   }
 }
