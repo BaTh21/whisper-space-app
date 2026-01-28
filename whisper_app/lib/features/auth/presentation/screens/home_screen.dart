@@ -2,22 +2,26 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:whisper_space_flutter/core/constants/api_constants.dart';
 import 'package:whisper_space_flutter/core/providers/theme_provider.dart';
 import 'package:whisper_space_flutter/features/auth/data/models/diary_model.dart';
 import 'package:whisper_space_flutter/features/auth/data/models/user_model.dart';
 import 'package:whisper_space_flutter/features/chat/chat_screen.dart';
+import 'package:whisper_space_flutter/core/services/storage_service.dart';
+import 'package:whisper_space_flutter/features/auth/data/models/diary_model.dart';
 import 'package:whisper_space_flutter/features/feed/presentation/screens/create_diary_screen.dart';
 import 'package:whisper_space_flutter/features/feed/presentation/screens/edit_diary_full_screen.dart';
-import 'package:whisper_space_flutter/features/friend/presentation/screens/friend_screen.dart';
 import 'package:whisper_space_flutter/shared/widgets/diary_card.dart';
+import 'package:whisper_space_flutter/features/friend/presentation/screens/friend_screen.dart';
+import 'package:whisper_space_flutter/features/chat/chat_screen.dart';
 
 import '../../../../features/feed/data/datasources/feed_api_service.dart';
 import '../../../../features/feed/presentation/providers/feed_provider.dart';
 import 'login_screen.dart';
 import 'providers/auth_provider.dart';
+import 'package:whisper_space_flutter/features/inbox/inbox_screen.dart';
+import 'package:whisper_space_flutter/features/inbox/inbox_api_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -29,6 +33,12 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   int? _currentUserId;
+  int? _currentUserId; // Store current user ID
+  late final InboxAPISource inboxApi;
+
+  bool isLoading = true;
+  String? error;
+  int _unreadCount = 0;
 
   final List<Widget> _screens = [
     const FeedTab(),
@@ -50,6 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadCurrentUser();
+    _initServicesAndLoad();
   }
 
   void _loadCurrentUser() {
@@ -62,6 +73,28 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     });
+  }
+
+  Future<void> _initServicesAndLoad() async{
+    final storageService = StorageService();
+    await storageService.init();
+
+    inboxApi = InboxAPISource(storageService: storageService);
+
+    _loadData();
+  }
+
+  Future<void> _loadData() async{
+    try{
+      final count = await inboxApi.getUnreadActivityCount();
+      setState(() {
+        _unreadCount = count;
+        isLoading = false;
+      });
+    }catch(e){
+      isLoading = false;
+      error = e.toString();
+    }
   }
 
   @override
@@ -111,6 +144,45 @@ class _HomeScreenState extends State<HomeScreen> {
               _selectedIndex == 0 ? _buildFloatingActionButton(context) : null,
         );
       },
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_appBarTitles[_selectedIndex]),
+        centerTitle: true,
+        elevation: 0,
+        actions: [
+          IconButton(
+            tooltip: 'Inbox',
+            onPressed: () async {
+              await showInboxDialog(context);
+
+              _loadData();
+            },
+            icon: Badge(
+              isLabelVisible: _unreadCount > 0,
+              label: Text(_unreadCount > 99 ? '99+' : '$_unreadCount'),
+              child: const Icon(Icons.mail_outline),
+            ),
+          ),
+          if (_selectedIndex == 4)
+            IconButton(
+              icon: const Icon(Icons.logout),
+              tooltip: 'Logout',
+              onPressed: _showLogoutDialog,
+            )
+          else if (_selectedIndex == 0)
+            IconButton(
+              icon: const Icon(Icons.add),
+              tooltip: 'Create New Diary',
+              onPressed: () => _createNewDiaryFromHome(context),
+            ),
+        ],
+      ),
+      body: _screens[_selectedIndex],
+      bottomNavigationBar: _buildBottomNavBar(),
+      // ADDED: FloatingActionButton that's always visible on Feed tab
+      floatingActionButton:
+          _selectedIndex == 0 ? _buildFloatingActionButton(context) : null,
+
     );
   }
 
@@ -119,6 +191,15 @@ class _HomeScreenState extends State<HomeScreen> {
       onPressed: () => _createNewDiaryFromHome(context),
       child: const Icon(Icons.add),
       heroTag: 'home_fab',
+      heroTag: 'home_fab',
+      child: const Icon(Icons.add), // Unique tag for FAB
+    );
+  }
+
+  Future<void> showInboxDialog(BuildContext context) {
+    return Navigator.of(context).push(
+      _RightSlidePageRoute(widget: InboxDialog(unreadCounts: _unreadCount,)),
+
     );
   }
 
@@ -578,6 +659,26 @@ class _FeedTabState extends State<FeedTab> {
   }
 }
 
+class _RightSlidePageRoute extends PageRouteBuilder {
+  final Widget widget;
+  _RightSlidePageRoute({required this.widget})
+      : super(
+    pageBuilder: (context, animation, secondaryAnimation) => widget,
+    transitionDuration: const Duration(milliseconds: 300),
+    reverseTransitionDuration: const Duration(milliseconds: 300),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final begin = const Offset(1.0, 0.0); // start from right
+      final end = Offset.zero;
+      final curve = Curves.easeInOut;
+      final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+      return SlideTransition(
+        position: animation.drive(tween),
+        child: child,
+      );
+    },
+  );
+}
+
 class MessagesTab extends StatelessWidget {
   const MessagesTab({super.key});
 
@@ -618,10 +719,10 @@ class NotesTab extends StatelessWidget {
   }
 }
 
-class ProfileTab extends StatefulWidget {
+class ProfileTab extends StatelessWidget {
   const ProfileTab({super.key});
-
   @override
+
   State<ProfileTab> createState() => _ProfileTabState();
 }
 
@@ -908,6 +1009,7 @@ class _ProfileTabState extends State<ProfileTab> {
       builder: (context, authProvider, themeProvider, child) {
         final user = authProvider.currentUser;
 
+
         if (user == null) {
           return _buildLoadingProfile();
         }
@@ -919,6 +1021,7 @@ class _ProfileTabState extends State<ProfileTab> {
               const SizedBox(height: 8),
 
               // Theme Settings Card
+              // Profile Header
               Card(
                 elevation: 0,
                 shape: RoundedRectangleBorder(
@@ -1113,6 +1216,27 @@ class _ProfileTabState extends State<ProfileTab> {
                       Text(
                         user.email,
                         style: TextStyle(
+                      const CircleAvatar(
+                        radius: 50,
+                        backgroundColor: Color(0xFF6C63FF),
+                        child: Icon(
+                          Icons.person,
+                          size: 60,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        user?.username ?? 'User',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        user?.email ?? '',
+                        style: const TextStyle(
                           fontSize: 16,
                           color: Theme.of(context).textTheme.bodySmall?.color,
                         ),
@@ -1267,6 +1391,27 @@ class _ProfileTabState extends State<ProfileTab> {
                       ),
                     ),
                   ],
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Stats
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _StatItem(value: '24', label: 'Posts'),
+                      _StatItem(value: '128', label: 'Friends'),
+                      _StatItem(value: '15', label: 'Notes'),
+                      _StatItem(value: '42', label: 'Likes'),
+                    ],
+                  ),
+
                 ),
               ),
 
@@ -1485,6 +1630,37 @@ class _ProfileTabState extends State<ProfileTab> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _StatItem extends StatelessWidget {
+  final String value;
+  final String label;
+
+  const _StatItem({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF6C63FF),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Colors.grey,
+          ),
+        ),
+      ],
     );
   }
 }

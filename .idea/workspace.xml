@@ -4,21 +4,7 @@
     <option name="autoReloadType" value="NONE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b12d6fd2-fea8-4182-bfb0-3d162530dba8" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/chat_api_service.dart" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/chat_screen.dart" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/create_group_dialog.dart" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/model/chat_model/chat_list_model.dart" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/model/group_message_model/group_message_model.dart" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/model/group_model/group_details_model.dart" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/model/group_model/group_image_model.dart" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/model/group_model/user_model.dart" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/screens/group/group_chat_screen.dart" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/screens/private/private_chat_screen.dart" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/whisper_app/lib/utils/format_time.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/lib/features/auth/presentation/screens/home_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/lib/features/auth/presentation/screens/home_screen.dart" afterDir="false" />
-    </list>
+    <list default="true" id="b12d6fd2-fea8-4182-bfb0-3d162530dba8" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -109,6 +95,14 @@
           <url>file://$PROJECT_DIR$/whisper_app/lib/features/chat/model/chat_model/chat_list_model.dart</url>
           <line>30</line>
           <option name="timeStamp" value="4" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="Dart">
+          <url>file://$PROJECT_DIR$/whisper_app/lib/features/chat/screens/group/group_chat_screen.dart</url>
+          <option name="timeStamp" value="5" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="Dart">
+          <url>file://$PROJECT_DIR$/whisper_app/lib/features/chat/chat_api_service.dart</url>
+          <option name="timeStamp" value="9" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>
