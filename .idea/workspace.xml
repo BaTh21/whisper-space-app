@@ -4,14 +4,7 @@
     <option name="autoReloadType" value="NONE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b12d6fd2-fea8-4182-bfb0-3d162530dba8" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/screens/group/group_message_screen.dart" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/whisper_app/lib/features/websocket/group_websocket.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/lib/features/chat/chat_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/chat_screen.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/lib/features/chat/model/group_message_model/group_message_model.dart" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/model/group_message_model/group_message_model.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/whisper_app/lib/features/chat/screens/group/group_chat_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/whisper_app/lib/features/chat/screens/group/group_chat_screen.dart" afterDir="false" />
-    </list>
+    <list default="true" id="b12d6fd2-fea8-4182-bfb0-3d162530dba8" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -84,6 +77,17 @@
       <updated>1768983848408</updated>
     </task>
     <servers />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
