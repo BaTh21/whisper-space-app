@@ -27,6 +27,7 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen>{
   late final ChatAPISource chatApi;
+
   List<ChatListItemModel> chats = [];
   List<ChatListItemModel> filteredChats = [];
   bool isLoading = true;
@@ -111,21 +112,37 @@ class _ChatScreenState extends State<ChatScreen>{
             )
             ) : null,
           ),
-          if (chat.creator != null && chat.creator!.avatar != null)
+          if (chat.creator != null)
             Positioned(
-              bottom: 0,
-              left: 0,
+              bottom: -5,
+              left: -5,
               child: Container(
                 width: 20,
                 height: 20,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 1.5),
-                  image: DecorationImage(
+                  color: Colors.grey[300],
+                  image: chat.creator?.avatar != null
+                      ? DecorationImage(
                     image: NetworkImage(chat.creator!.avatar!),
                     fit: BoxFit.cover,
-                  ),
+                  )
+                      : null,
                 ),
+                alignment: Alignment.center,
+                child: chat.creator?.avatar == null
+                    ? Text(
+                  chat.creator?.username != null && chat.creator!.username!.isNotEmpty
+                      ? chat.creator!.username![0].toUpperCase()
+                      : "?",
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
+                  ),
+                )
+                    : null,
               ),
             ),
         ],
@@ -237,6 +254,7 @@ class _ChatScreenState extends State<ChatScreen>{
                                 groupName: chat.name,
                                 chatApi: chatApi,
                                 onRefreshChats: _loadChats,
+                                storageService: chatApi.storageService,
                               ),
                             ),
                           );

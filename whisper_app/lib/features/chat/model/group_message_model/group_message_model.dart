@@ -70,6 +70,7 @@ class ParentMessageModel{
 class GroupMessageModel {
   final int id;
   final String? incomingTempId;
+  final AuthorModel sender;
   final AuthorModel? forwardedBy;
   final int groupId;
   final String? content;
@@ -85,6 +86,7 @@ class GroupMessageModel {
   GroupMessageModel({
     required this.id,
     this.incomingTempId,
+    required this.sender,
     this.forwardedBy,
     required this.groupId,
     this.content,
@@ -95,26 +97,74 @@ class GroupMessageModel {
     this.voiceUrl,
     this.seenBy,
     this.tempId,
-    this.parentMessage
+    this.parentMessage,
   });
 
-  factory GroupMessageModel.fromJson(Map<String, dynamic> json){
+  /// Optimistic message (before server response)
+  factory GroupMessageModel.temp({
+    required String tempId,
+    required String content,
+    required AuthorModel sender,
+    required int groupId,
+  }) {
     return GroupMessageModel(
-        id: json['id'],
-        incomingTempId: json['incoming_temp_id'],
-        groupId: json['group_id'],
-        forwardedBy: json['forwarded_by'],
-        content: json['content'],
-        callContent: json['call_content'],
-        createdAt: DateTime.parse(json['created_at']),
-        fileUrl: json['file_url'],
-        voiceUrl: json['voice_url'],
-        seenBy:
-        json['seen_by'] != null ?
-        SeenMessageModel.fromJson(json['seeb_by']) : null,
-        tempId: json['temp_id'],
-        parentMessage: json['parent_message'] != null
-        ? ParentMessageModel.fromJson(json['parent_message']): null
+      id: -1,
+      tempId: tempId,
+      sender: sender,
+      groupId: groupId,
+      content: content,
+      createdAt: DateTime.now(),
+    );
+  }
+
+  factory GroupMessageModel.fromJson(Map<String, dynamic> json) {
+    return GroupMessageModel(
+      id: json['id'],
+      incomingTempId: json['incoming_temp_id'],
+      groupId: json['group_id'],
+      sender: AuthorModel.fromJson(json['sender']),
+      forwardedBy: json['forwarded_by'] != null
+          ? AuthorModel.fromJson(json['forwarded_by'])
+          : null,
+      content: json['content'],
+      callContent: json['call_content'],
+      createdAt: DateTime.parse(json['created_at']),
+      updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'])
+          : null,
+      fileUrl: json['file_url'],
+      voiceUrl: json['voice_url'],
+      seenBy: json['seen_by'] != null
+          ? SeenMessageModel.fromJson(json['seen_by'])
+          : null,
+      tempId: json['temp_id'],
+      parentMessage: json['parent_message'] != null
+          ? ParentMessageModel.fromJson(json['parent_message'])
+          : null,
+    );
+  }
+
+  GroupMessageModel copyWith({
+    int? id,
+    String? content,
+    DateTime? updatedAt,
+    SeenMessageModel? seenBy,
+  }) {
+    return GroupMessageModel(
+      id: id ?? this.id,
+      incomingTempId: incomingTempId,
+      sender: sender,
+      forwardedBy: forwardedBy,
+      groupId: groupId,
+      content: content ?? this.content,
+      callContent: callContent,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      fileUrl: fileUrl,
+      voiceUrl: voiceUrl,
+      seenBy: seenBy ?? this.seenBy,
+      tempId: tempId,
+      parentMessage: parentMessage,
     );
   }
 }
