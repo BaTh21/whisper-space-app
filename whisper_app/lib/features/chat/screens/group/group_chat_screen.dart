@@ -1,10 +1,16 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:whisper_space_flutter/core/services/storage_service.dart';
 import 'package:whisper_space_flutter/features/chat/chat_api_service.dart';
 import 'package:whisper_space_flutter/features/chat/model/group_model/group_details_model.dart';
 import 'package:whisper_space_flutter/features/chat/model/group_model/user_model.dart';
 import 'package:whisper_space_flutter/features/auth/presentation/screens/providers/auth_provider.dart';
 import 'group_dialog/group_dialog_page.dart';
+import 'package:whisper_space_flutter/features/websocket/group_websocket.dart';
+import 'group_message_screen.dart';
 
 class GroupChatScreen extends StatefulWidget {
   final int groupId;
@@ -12,22 +18,28 @@ class GroupChatScreen extends StatefulWidget {
   final String? groupCover;
   final ChatAPISource chatApi;
   final Future<void> Function()? onRefreshChats;
+  final StorageService storageService;
 
-  const GroupChatScreen({super.key,
-    required this.groupId,
-    required this.groupName,
-    this.groupCover,
-    required this.chatApi, this.onRefreshChats
-  });
+  const GroupChatScreen(
+      {super.key,
+      required this.groupId,
+      required this.groupName,
+      this.groupCover,
+      required this.chatApi,
+      this.onRefreshChats,
+      required this.storageService
+      });
 
   @override
   State<GroupChatScreen> createState() => _GroupChatScreenState();
 }
 
 class _GroupChatScreenState extends State<GroupChatScreen> {
+  GroupWebsocket? groupWs;
   int? _currentUserId;
   GroupDetailsModel? group;
   List<UserModel>? members = [];
+  StreamSubscription? _wsSubscription;
 
   bool isLoading = true;
   String? error;
@@ -36,7 +48,22 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   void initState() {
     super.initState();
     _loadCurrentUser();
-    _loadGroup();
+    _init();
+  }
+
+  Future<void> _init() async {
+    try {
+      await _loadGroup();
+      await _connectGroupWebsocket();
+      setState(() {
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        error = e.toString();
+        isLoading = false;
+      });
+    }
   }
 
   void _loadCurrentUser() {
@@ -66,7 +93,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       final memberData = await widget.chatApi.getGroupMembers(widget.groupId);
       setState(() {
         group = result;
-        members= memberData;
+        members = memberData;
         isLoading = false;
       });
       await _loadCovers();
@@ -76,6 +103,41 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         isLoading = false;
       });
     }
+  }
+
+  Future<void> _connectGroupWebsocket() async {
+    groupWs ??= GroupWebsocket(
+      groupId: widget.groupId,
+      storageService: widget.storageService,
+    );
+
+    try {
+      await groupWs!.connect();
+
+      _wsSubscription = groupWs!.stream.listen(
+            (jsonData) {
+          print('WS EVENT: $jsonData');
+        },
+        onError: (error) {
+          debugPrint('WS stream error: $error');
+        },
+        onDone: () {
+          debugPrint('WS connection closed');
+        },
+      );
+    } catch (e) {
+      debugPrint('WebSocket connection failed: $e');
+      setState(() {
+        error = 'WebSocket connection failed';
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _wsSubscription?.cancel();
+    groupWs?.disconnect();
+    super.dispose();
   }
 
   void _showGroupDialog() {
@@ -95,8 +157,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         transitionsBuilder: (_, animation, __, child) {
           const begin = Offset(1.0, 0.0);
           const end = Offset.zero;
-          final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
-          return SlideTransition(position: animation.drive(tween), child: child);
+          final tween = Tween(begin: begin, end: end)
+              .chain(CurveTween(curve: Curves.easeInOut));
+          return SlideTransition(
+              position: animation.drive(tween), child: child);
         },
       ),
     );
@@ -104,12 +168,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
-    if (error != null) {
-      return Scaffold(body: Center(child: Text(error!)));
+    if (isLoading || _currentUserId == null || groupWs == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
 
     return Scaffold(
@@ -122,12 +184,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               SizedBox(
                 width: 48,
                 height: 48,
-                child:
-                CircleAvatar(
+                child: CircleAvatar(
                   radius: 18,
-                  backgroundImage: group!.cover != null
-                      ? NetworkImage(group!.cover!)
-                      : null,
+                  backgroundImage:
+                  group!.cover != null ? NetworkImage(group!.cover!) : null,
                   backgroundColor: Colors.grey[300],
                   child: group!.cover == null
                       ? Text(group!.name[0].toUpperCase(),
@@ -141,7 +201,13 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           ),
         ),
       ),
-      body: Center(child: Text('Group chat ${group!.name}')),
+      body: GroupMessageScreen(
+        groupId: widget.groupId,
+        currentUserId: _currentUserId!,
+        groupWebsocket: groupWs!,
+        storageService: widget.storageService,
+        chatApi: widget.chatApi
+      ),
     );
   }
 }
